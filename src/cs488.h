@@ -41,40 +41,39 @@ static GLFWwindow* globalGLFWindow;
 
 // window size and resolution
 // (do not make it too large - will be slow!)
-const int globalWidth = 512;
-const int globalHeight = 384;
+constexpr int globalWidth = 512;
+constexpr int globalHeight = 384;
 
 
 // degree and radian
-const float PI = float(4.0 * atan(1.0));
-const float DegToRad = PI / 180.0f;
-const float RadToDeg = 180.0f / PI;
+constexpr float PI = 3.14159265358979f;
+constexpr float DegToRad = PI / 180.0f;
+constexpr float RadToDeg = 180.0f / PI;
 
 
 // for ray tracing
-const float Epsilon = 1e-5f;
+constexpr float Epsilon = 5e-5f;
 
 
 // amount the camera moves with a mouse and a keyboard
-const float ANGFACT = 0.2f;
-const float SCLFACT = 0.1f;
+constexpr float ANGFACT = 0.2f;
+constexpr float SCLFACT = 0.1f;
 
 
 // fixed camera parameters
-const float globalAspectRatio = float(globalWidth / float(globalHeight));
-const float globalFOV = 45.0f; // vertical field of view
-const float globalDepthMin = Epsilon; // for rasterization
-const float globalDepthMax = 100.0f; // for rasterization
-const float globalFilmSize = 0.032f; //for ray tracing
+constexpr float globalAspectRatio = float(globalWidth / float(globalHeight));
+constexpr float globalFOV = 45.0f; // vertical field of view
+constexpr float globalDepthMin = Epsilon; // for rasterization
+constexpr float globalDepthMax = 100.0f; // for rasterization
+constexpr float globalFilmSize = 0.032f; //for ray tracing
 const float globalDistanceToFilm = globalFilmSize / (2.0f * tan(globalFOV * DegToRad * 0.5f)); // for ray tracing
-const bool globalShowRaytraceProgress = false; // for ray tracing
 
 
 // particle system related
 bool globalEnableParticles = false;
-const float deltaT = 0.002f;
-const float3 globalGravity = float3(0.0f, -9.8f, 0.0f);
-const int globalNumParticles = 300;
+constexpr float deltaT = 0.002f;
+constexpr float3 globalGravity = float3(0.0f, -9.8f, 0.0f);
+constexpr int globalNumParticles = 300;
 
 
 // dynamic camera parameters
@@ -83,6 +82,7 @@ float3 globalLookat = float3(0.0f, 0.0f, 0.0f);
 float3 globalUp = normalize(float3(0.0f, 1.0f, 0.0f));
 float3 globalViewDir; // should always be normalize(globalLookat - globalEye)
 float3 globalRight; // should always be normalize(cross(globalViewDir, globalUp));
+bool globalShowRaytraceProgress = false; // for ray tracing
 
 
 // mouse event
@@ -101,7 +101,7 @@ enumRenderType globalRenderType = RENDER_IMAGE;
 int globalFrameCount = 0;
 static bool globalRecording = false;
 static GifWriter globalGIFfile;
-const int globalGIFdelay = 1;
+constexpr int globalGIFdelay = 1;
 
 
 // OpenGL related data (do not modify it if it is working)
@@ -129,7 +129,7 @@ namespace PCG32 {
 	static uint64_t const multiplier = 6364136223846793005u;
 	uint32_t pcg32_fast(void) {
 		uint64_t x = mcg_state;
-		unsigned count = (unsigned)(x >> 61);
+		const unsigned count = (unsigned)(x >> 61);
 		mcg_state = x * multiplier;
 		x ^= x >> 22;
 		return (uint32_t)(x >> (22 + count));
@@ -160,7 +160,7 @@ public:
 		return pow(r, 1.0f / gamma);
 	}
 
-	void resize(int newWdith, int newHeight) {
+	void resize(const int newWdith, const int newHeight) {
 		this->pixels.resize(newWdith * newHeight);
 		this->depths.resize(newWdith * newHeight);
 		this->width = newWdith;
@@ -181,15 +181,15 @@ public:
 		this->clear();
 	}
 
-	bool valid(int i, int j) {
+	bool valid(const int i, const int j) const {
 		return (i >= 0) && (i < this->width) && (j >= 0) && (j < this->height);
 	}
 
-	float& depth(int i, int j) {
+	float& depth(const int i, const int j) {
 		return this->depths[i + j * width];
 	}
 
-	float3& pixel(int i, int j) {
+	float3& pixel(const int i, const int j) {
 		// optionally can check with "valid", but it will be slow
 		return this->pixels[i + j * width];
 	}
@@ -338,19 +338,19 @@ void mouseButtonFunc(GLFWwindow* window, int button, int action, int mods) {
 // mouse button events (you do not need to modify it unless you want to)
 void cursorPosFunc(GLFWwindow* window, double mouse_x, double mouse_y) {
 	if (mouseLeftPressed) {
-		float xfact = -ANGFACT * float(mouse_y - m_mouseY);
-		float yfact = -ANGFACT * float(mouse_x - m_mouseX);
+		const float xfact = -ANGFACT * float(mouse_y - m_mouseY);
+		const float yfact = -ANGFACT * float(mouse_x - m_mouseX);
 		float3 v = globalViewDir;
 
 		// local function in C++...
 		struct {
-			float3 operator()(float theta, const float3 v, const float3 w) {
-				float c = cosf(theta);
-				float s = sinf(theta);
+			float3 operator()(float theta, const float3& v, const float3& w) {
+				const float c = cosf(theta);
+				const float s = sinf(theta);
 
-				float3 v0 = dot(v, w) * w;
-				float3 v1 = v - v0;
-				float3 v2 = cross(w, v1);
+				const float3 v0 = dot(v, w) * w;
+				const float3 v1 = v - v0;
+				const float3 v2 = cross(w, v1);
 
 				return v0 + c * v1 + s * v2;
 			}
@@ -417,14 +417,14 @@ public:
 
 	// support 8-bit texture
 	bool isTextured = false;
-	unsigned char* texture = NULL;
+	unsigned char* texture = nullptr;
 	int textureWidth = 0;
 	int textureHeight = 0;
 
 	Material() {};
 	virtual ~Material() {};
 
-	void setReflectance(const float3 c) {
+	void setReflectance(const float3& c) {
 		if (type == MAT_LAMBERTIAN) {
 			Kd = c;
 		} else if (type == MAT_METAL) {
@@ -434,20 +434,21 @@ public:
 		}
 	}
 
-	float3 fetchTexture(const float2 tex) {
-		int x = int(tex.x * textureWidth);
-		int y = int(tex.y * textureHeight);
-		if ((x >= 0) && (x < textureWidth) && (y >= 0) && (y < textureHeight)) {
-			unsigned char r = texture[(x + y * textureWidth) * 3 + 0];
-			unsigned char g = texture[(x + y * textureWidth) * 3 + 1];
-			unsigned char b = texture[(x + y * textureWidth) * 3 + 2];
-			return float3(r, g, b) / 255.0f;
-		} else {
-			return float3(0.0f);
-		}
+	float3 fetchTexture(const float2& tex) const {
+		// repeating
+		int x = int(tex.x * textureWidth) % textureWidth;
+		int y = int(tex.y * textureHeight) % textureHeight;
+		if (x < 0) x += textureWidth;
+		if (y < 0) y += textureHeight;
+
+		int pix = (x + y * textureWidth) * 3;
+		const unsigned char r = texture[pix + 0];
+		const unsigned char g = texture[pix + 1];
+		const unsigned char b = texture[pix + 2];
+		return float3(r, g, b) / 255.0f;
 	}
 
-	float3 BRDF(const float3 wi, const float3 wo, const float3 n) {
+	float3 BRDF(const float3& wi, const float3& wo, const float3& n) const {
 		float3 brdfValue = float3(0.0f);
 		if (type == MAT_LAMBERTIAN) {
 			// BRDF
@@ -460,7 +461,7 @@ public:
 		return brdfValue;
 	};
 
-	float PDF(const float3 wGiven, const float3 wSample) {
+	float PDF(const float3& wGiven, const float3& wSample) const {
 		// probability density function for a given direction and a given sample
 		// it has to be consistent with the sampler
 		float pdfValue = 0.0f;
@@ -474,7 +475,7 @@ public:
 		return pdfValue;
 	}
 
-	float3 sampler(const float3 wGiven, float& pdfValue) {
+	float3 sampler(const float3& wGiven, float& pdfValue) const {
 		// sample a vector and record its probability density as pdfValue
 		float3 smp = float3(0.0f);
 		if (type == MAT_LAMBERTIAN) {
@@ -500,7 +501,7 @@ public:
 	float3 P; // location
 	float3 N; // shading normal vector
 	float2 T; // texture coordinate
-	Material* material; // Pointer to the material of the intersected object
+	const Material* material; // const pointer to the material of the intersected object
 };
 
 
@@ -555,11 +556,43 @@ public:
 	}
 
 
-	bool intersect(HitInfo& minHit, const Ray& ray) {
-		// ====== implement it in A2 extra ======
+	bool intersect(HitInfo& minHit, const Ray& ray) const {
 		// set minHit.t as the distance to the intersection point
 		// return true/false if the ray hits or not
-		return false;
+		float tx1 = (minp.x - ray.o.x) / ray.d.x;
+		float ty1 = (minp.y - ray.o.y) / ray.d.y;
+		float tz1 = (minp.z - ray.o.z) / ray.d.z;
+
+		float tx2 = (maxp.x - ray.o.x) / ray.d.x;
+		float ty2 = (maxp.y - ray.o.y) / ray.d.y;
+		float tz2 = (maxp.z - ray.o.z) / ray.d.z;
+
+		if (tx1 > tx2) {
+			const float temp = tx1;
+			tx1 = tx2;
+			tx2 = temp;
+		}
+
+		if (ty1 > ty2) {
+			const float temp = ty1;
+			ty1 = ty2;
+			ty2 = temp;
+		}
+
+		if (tz1 > tz2) {
+			const float temp = tz1;
+			tz1 = tz2;
+			tz2 = temp;
+		}
+
+		float t1 = tx1; if (t1 < ty1) t1 = ty1; if (t1 < tz1) t1 = tz1;
+		float t2 = tx2; if (t2 > ty2) t2 = ty2; if (t2 > tz2) t2 = tz2;
+
+		if (t1 > t2) return false;
+		if ((t1 < 0.0) && (t2 < 0.0)) return false;
+
+		minHit.t = t1;
+		return true;
 	}
 };
 
@@ -579,7 +612,7 @@ struct Triangle {
 
 
 // triangle mesh
-static float3 shade(HitInfo hit, const float3 viewDir, const int level = 0);
+static float3 shade(const HitInfo& hit, const float3& viewDir, const int level = 0);
 class TriangleMesh {
 public:
 	std::vector<Triangle> triangles;
@@ -594,24 +627,24 @@ public:
 		// (hint: you will need to have float4 versions of p and n)
 		for (unsigned int i = 0; i < this->triangles.size(); i++) {
 			for (int k = 0; k <= 2; k++) {
-				float3 &p = this->triangles[i].positions[k];
-				float3 &n = this->triangles[i].normals[k];
-				// not doing anything right now!
+				const float3 &p = this->triangles[i].positions[k];
+				const float3 &n = this->triangles[i].normals[k];
+				// not doing anything right now
 			}
 		}
 	}
 
-	void rasterizeTriangle(const Triangle& tri, const float4x4& plm) {
+	void rasterizeTriangle(const Triangle& tri, const float4x4& plm) const {
 		// ====== implement it in A1 ======
 		// rasterization of a triangle
 		// "plm" should be a matrix that contains perspective projection and the camera matrix
 		// you do not need to implement clipping
 		// you may call the "shade" function to get the pixel value
-		// (ignore viewDir for now)
+		// (you may ignore viewDir for now)
 	}
 
 
-	bool raytraceTriangle(HitInfo& result, const Ray& ray, const Triangle& tri, float tMin, float tMax) {
+	bool raytraceTriangle(HitInfo& result, const Ray& ray, const Triangle& tri, float tMin, float tMax) const {
 		// ====== implement it in A2 ======
 		// ray-triangle intersection
 		// fill in "result" when there is an intersection
@@ -623,7 +656,7 @@ public:
 	// some precalculation for bounding boxes (you do not need to change it)
 	void preCalc() {
 		bbox.reset();
-		for (unsigned int i = 0; i < triangles.size(); i++) {
+		for (int i = 0, _n = (int)triangles.size(); i < _n; i++) {
 			this->triangles[i].bbox.reset();
 			this->triangles[i].bbox.fit(this->triangles[i].positions[0]);
 			this->triangles[i].bbox.fit(this->triangles[i].positions[1]);
@@ -646,14 +679,14 @@ public:
 		float* texcoords;
 		int nIndices;
 		int* indices;
-		int* matid = NULL;
+		int* matid = nullptr;
 
 		printf("Loading \"%s\"...\n", filename);
 		ParseOBJ(filename, nVertices, &vertices, &normals, &texcoords, nIndices, &indices, &matid);
 		if (nVertices == 0) return false;
 		this->triangles.resize(nIndices / 3);
 
-		if (matid != NULL) {
+		if (matid != nullptr) {
 			for (unsigned int i = 0; i < materials.size(); i++) {
 				// convert .mlt data into BSDF definitions
 				// you may change the followings in the final project if you want
@@ -680,7 +713,7 @@ public:
 			this->triangles[i].positions[1] = float3(vertices[v1 * 3 + 0], vertices[v1 * 3 + 1], vertices[v1 * 3 + 2]);
 			this->triangles[i].positions[2] = float3(vertices[v2 * 3 + 0], vertices[v2 * 3 + 1], vertices[v2 * 3 + 2]);
 
-			if (normals != NULL) {
+			if (normals != nullptr) {
 				this->triangles[i].normals[0] = float3(normals[v0 * 3 + 0], normals[v0 * 3 + 1], normals[v0 * 3 + 2]);
 				this->triangles[i].normals[1] = float3(normals[v1 * 3 + 0], normals[v1 * 3 + 1], normals[v1 * 3 + 2]);
 				this->triangles[i].normals[2] = float3(normals[v2 * 3 + 0], normals[v2 * 3 + 1], normals[v2 * 3 + 2]);
@@ -697,9 +730,9 @@ public:
 
 			// material id
 			this->triangles[i].idMaterial = 0;
-			if (matid != NULL) {
+			if (matid != nullptr) {
 				// read texture coordinates
-				if ((texcoords != NULL) && materials[matid[i]].isTextured) {
+				if ((texcoords != nullptr) && materials[matid[i]].isTextured) {
 					this->triangles[i].texcoords[0] = float2(texcoords[v0 * 2 + 0], texcoords[v0 * 2 + 1]);
 					this->triangles[i].texcoords[1] = float2(texcoords[v1 * 2 + 0], texcoords[v1 * 2 + 1]);
 					this->triangles[i].texcoords[2] = float2(texcoords[v2 * 2 + 0], texcoords[v2 * 2 + 1]);
@@ -715,7 +748,6 @@ public:
 				this->triangles[i].texcoords[2] = float2(0.0f);
 			}
 		}
-		preCalc();
 		printf("Loaded \"%s\" with %d triangles.\n", filename, int(triangles.size()));
 
 		delete[] vertices;
@@ -734,7 +766,7 @@ public:
 
 
 	bool bruteforceIntersect(HitInfo& result, const Ray& ray, float tMin = 0.0f, float tMax = FLT_MAX) {
-		// bruteforce ray tracing  (you do not need to change it)
+		// bruteforce ray tracing (for debugging)
 		bool hit = false;
 		HitInfo tempMinHit;
 		result.t = FLT_MAX;
@@ -758,12 +790,16 @@ public:
 		triangles[0].idMaterial = 0;
 
 		triangles[0].positions[0] = float3(-0.5f, -0.5f, 0.0f);
-		triangles[0].positions[1] = float3(0.0f, 0.5f, 0.0f);
-		triangles[0].positions[2] = float3(0.5f, -0.5f, 0.0f);
+		triangles[0].positions[1] = float3(0.5f, -0.5f, 0.0f);
+		triangles[0].positions[2] = float3(0.0f, 0.5f, 0.0f);
 
-		triangles[0].normals[0] = float3(0.0f, 0.0f, -1.0f);
-		triangles[0].normals[1] = float3(0.0f, 0.0f, -1.0f);
-		triangles[0].normals[2] = float3(0.0f, 0.0f, -1.0f);
+		const float3 e0 = this->triangles[0].positions[1] - this->triangles[0].positions[0];
+		const float3 e1 = this->triangles[0].positions[2] - this->triangles[0].positions[0];
+		const float3 n = normalize(cross(e0, e1));
+
+		triangles[0].normals[0] = n;
+		triangles[0].normals[1] = n;
+		triangles[0].normals[2] = n;
 
 		triangles[0].texcoords[0] = float2(0.0f, 0.0f);
 		triangles[0].texcoords[1] = float2(0.0f, 1.0f);
@@ -792,9 +828,9 @@ private:
 		FILE* fp = fopen(fileName.c_str(), "r");
 
 		Material mtl;
-		mtl.texture = NULL;
+		mtl.texture = nullptr;
 		char line[81];
-		while (fgets(line, 80, fp) != NULL) {
+		while (fgets(line, 80, fp) != nullptr) {
 			float r, g, b, s;
 			std::string lineStr;
 			lineStr = line;
@@ -820,7 +856,7 @@ private:
 				lineStr.erase(0, 3);
 				sscanf(lineStr.c_str(), "%f\n", &s);
 				mtl.Ns = s;
-				mtl.texture = NULL;
+				mtl.texture = nullptr;
 				materials.push_back(mtl);
 			} else if (lineStr.compare(0, 6, "map_Kd", 0, 6) == 0) {
 				lineStr.erase(0, 7);
@@ -1130,21 +1166,19 @@ public:
 // fill in the missing parts
 class BVH {
 public:
-	TriangleMesh* triangleMesh = NULL;
-	BVHNode* node = NULL;
+	const TriangleMesh* triangleMesh = nullptr;
+	BVHNode* node = nullptr;
 
 	const float costBBox = 1.0f;
 	const float costTri = 1.0f;
 
-	int rayTriCount = 0;
-	int rayAABBCount = 0;
 	int leafNum = 0;
 	int nodeNum = 0;
 
 	BVH() {}
-	void build(TriangleMesh* mesh);
+	void build(const TriangleMesh* mesh);
 
-	bool intersect(HitInfo& result, const Ray& ray, float tMin = 0.0f, float tMax = FLT_MAX) {
+	bool intersect(HitInfo& result, const Ray& ray, float tMin = 0.0f, float tMax = FLT_MAX) const {
 		bool hit = false;
 		HitInfo tempMinHit;
 		result.t = FLT_MAX;
@@ -1157,17 +1191,17 @@ public:
 
 		return hit;
 	}
-	bool traverse(HitInfo& result, const Ray& ray, int node_id, float tMin, float tMax);
+	bool traverse(HitInfo& result, const Ray& ray, int node_id, float tMin, float tMax) const;
 
 private:
-	void sortAxis(int* obj_index, const char axis, const int li, const int ri);
+	void sortAxis(int* obj_index, const char axis, const int li, const int ri) const;
 	int splitBVH(int* obj_index, const int obj_num, const AABB& bbox);
 
 };
 
 
-// quick sort bounding boxes (in case you want to build SAH-BVH)
-void BVH::sortAxis(int* obj_index, const char axis, const int li, const int ri) {
+// sort bounding boxes (in case you want to build SAH-BVH)
+void BVH::sortAxis(int* obj_index, const char axis, const int li, const int ri) const {
 	int i, j;
 	float pivot;
 	int temp;
@@ -1201,12 +1235,51 @@ void BVH::sortAxis(int* obj_index, const char axis, const int li, const int ri) 
 }
 
 
-
+//#define SAHBVH // use this in once you have SAH-BVH
 int BVH::splitBVH(int* obj_index, const int obj_num, const AABB& bbox) {
-	// ====== implement it in A2 extra ======
+	// ====== exntend it in A2 extra ======
+#ifndef SAHBVH
+	int bestAxis, bestIndex;
+	AABB bboxL, bboxR, bestbboxL, bestbboxR;
+	int* sorted_obj_index  = new int[obj_num];
 
-	// leaf node when there is only one object
-	if (obj_num == 1) {
+	// split along the largest axis
+	bestAxis = bbox.getLargestAxis();
+
+	// sorting along the axis
+	this->sortAxis(obj_index, bestAxis, 0, obj_num - 1);
+	for (int i = 0; i < obj_num; ++i) {
+		sorted_obj_index[i] = obj_index[i];
+	}
+
+	// split in the middle
+	bestIndex = obj_num / 2 - 1;
+
+	bboxL.reset();
+	for (int i = 0; i <= bestIndex; ++i) {
+		const Triangle& tri = triangleMesh->triangles[obj_index[i]];
+		bboxL.fit(tri.positions[0]);
+		bboxL.fit(tri.positions[1]);
+		bboxL.fit(tri.positions[2]);
+	}
+
+	bboxR.reset();
+	for (int i = bestIndex + 1; i < obj_num; ++i) {
+		const Triangle& tri = triangleMesh->triangles[obj_index[i]];
+		bboxR.fit(tri.positions[0]);
+		bboxR.fit(tri.positions[1]);
+		bboxR.fit(tri.positions[2]);
+	}
+
+	bestbboxL = bboxL;
+	bestbboxR = bboxR;
+#else
+	// implelement SAH-BVH here
+#endif
+
+	if (obj_num <= 4) {
+		delete[] sorted_obj_index;
+
 		this->nodeNum++;
 		this->node[this->nodeNum - 1].bbox = bbox;
 		this->node[this->nodeNum - 1].isLeaf = true;
@@ -1217,56 +1290,58 @@ int BVH::splitBVH(int* obj_index, const int obj_num, const AABB& bbox) {
 		}
 		int temp_id;
 		temp_id = this->nodeNum - 1;
-
 		this->leafNum++;
 
 		return temp_id;
+	} else {
+		// split obj_index into two 
+		int* obj_indexL = new int[bestIndex + 1];
+		int* obj_indexR = new int[obj_num - (bestIndex + 1)];
+		for (int i = 0; i <= bestIndex; ++i) {
+			obj_indexL[i] = sorted_obj_index[i];
+		}
+		for (int i = bestIndex + 1; i < obj_num; ++i) {
+			obj_indexR[i - (bestIndex + 1)] = sorted_obj_index[i];
+		}
+		delete[] sorted_obj_index;
+		int obj_numL = bestIndex + 1;
+		int obj_numR = obj_num - (bestIndex + 1);
+
+		// recursive call to build a tree
+		this->nodeNum++;
+		int temp_id;
+		temp_id = this->nodeNum - 1;
+		this->node[temp_id].bbox = bbox;
+		this->node[temp_id].isLeaf = false;
+		this->node[temp_id].idLeft = splitBVH(obj_indexL, obj_numL, bestbboxL);
+		this->node[temp_id].idRight = splitBVH(obj_indexR, obj_numR, bestbboxR);
+
+		delete[] obj_indexL;
+		delete[] obj_indexR;
+
+		return temp_id;
 	}
-
-	// split obj_index into two 
-	int* obj_indexL = NULL;
-	int* obj_indexR = NULL;
-	AABB bestbboxL, bestbboxR;
-	int obj_numL = 0;
-	int obj_numR = 0;
-
-	// recursive call to build a tree
-	this->nodeNum++;
-	int temp_id;
-	temp_id = this->nodeNum - 1;
-	this->node[temp_id].bbox = bbox;
-	this->node[temp_id].isLeaf = false;
-	this->node[temp_id].idLeft = splitBVH(obj_indexL, obj_numL, bestbboxL);
-	this->node[temp_id].idRight = splitBVH(obj_indexR, obj_numR, bestbboxR);
-
-	delete[] obj_indexL;
-	delete[] obj_indexR;
-
-	return temp_id;
 }
 
 
 // you may keep this part as-is
-void BVH::build(TriangleMesh* mesh) {
+void BVH::build(const TriangleMesh* mesh) {
 	triangleMesh = mesh;
 
 	// construct the bounding volume hierarchy
-	int* obj_index;
-	int obj_num;
-
-	obj_num = (int)(triangleMesh->triangles.size());
-	obj_index = new int[obj_num];
+	const int obj_num = (int)(triangleMesh->triangles.size());
+	int* obj_index = new int[obj_num];
 	for (int i = 0; i < obj_num; ++i) {
 		obj_index[i] = i;
 	}
 	this->nodeNum = 0;
-	this->node = new BVHNode[obj_num * 3];
+	this->node = new BVHNode[obj_num * 2];
 	this->leafNum = 0;
 
 	// calculate a scene bounding box
 	AABB bbox;
 	for (int i = 0; i < obj_num; i++) {
-		Triangle& tri = triangleMesh->triangles[obj_index[i]];
+		const Triangle& tri = triangleMesh->triangles[obj_index[i]];
 
 		bbox.fit(tri.positions[0]);
 		bbox.fit(tri.positions[1]);
@@ -1283,7 +1358,7 @@ void BVH::build(TriangleMesh* mesh) {
 
 
 // you may keep this part as-is
-bool BVH::traverse(HitInfo& minHit, const Ray& ray, int node_id, float tMin, float tMax) {
+bool BVH::traverse(HitInfo& minHit, const Ray& ray, int node_id, float tMin, float tMax) const {
 	bool hit = false;
 	HitInfo tempMinHit, tempMinHitL, tempMinHitR;
 	bool hit1, hit2;
@@ -1367,7 +1442,7 @@ public:
 	void updateMesh() {
 		// you can optionally update the other mesh information (e.g., bounding box, BVH - which is tricky)
 		if (sphereSize > 0) {
-			const int& n = int(sphere.triangles.size());
+			const int n = int(sphere.triangles.size());
 			for (int i = 0; i < globalNumParticles; i++) {
 				for (int j = 0; j < n; j++) {
 					particlesMesh.triangles[i * n + j].positions[0] = sphere.triangles[j].positions[0] + particles[i].position;
@@ -1402,6 +1477,7 @@ public:
 		if (sphereMeshFilePath) {
 			if (sphere.load(sphereMeshFilePath)) {
 				particlesMesh.triangles.resize(sphere.triangles.size() * globalNumParticles);
+				sphere.preCalc();
 				sphereSize = sphere.bbox.get_size().x * 0.5f;
 			} else {
 				particlesMesh.triangles.resize(globalNumParticles);
@@ -1435,7 +1511,7 @@ class Scene {
 public:
 	std::vector<TriangleMesh*> objects;
 	std::vector<PointLightSource*> pointLightSources;
-	BVH* bvh;
+	std::vector<BVH> bvhs;
 
 	void addObject(TriangleMesh* pObj) {
 		objects.push_back(pObj);
@@ -1445,23 +1521,22 @@ public:
 	}
 
 	void preCalc() {
-		bvh = new BVH[objects.size()];
+		bvhs.resize(objects.size());
 		for (int i = 0; i < objects.size(); i++) {
-			//bvh[i].build(objects[i]); // comment this in once you have a BVH
 			objects[i]->preCalc();
+			bvhs[i].build(objects[i]);
 		}
 	}
 
 	// ray-scene intersection
-	bool intersect(HitInfo& minHit, const Ray& ray, float tMin = 0.0f, float tMax = FLT_MAX) {
-		// loop over all the objects 
+	bool intersect(HitInfo& minHit, const Ray& ray, float tMin = 0.0f, float tMax = FLT_MAX) const {
 		bool hit = false;
 		HitInfo tempMinHit;
 		minHit.t = FLT_MAX;
 
-		for (int i = 0; i < objects.size(); i++) {
-			if (objects[i]->bruteforceIntersect(tempMinHit, ray, tMin, tMax)) {
-			//if (bvh[i].intersect(tempMinHit, ray, tMin, tMax)) { // use this instead once you have a BVH
+		for (int i = 0, i_n = (int)objects.size(); i < i_n; i++) {
+			//if (objects[i]->bruteforceIntersect(tempMinHit, ray, tMin, tMax)) { // for debugging
+			if (bvhs[i].intersect(tempMinHit, ray, tMin, tMax)) {
 				if (tempMinHit.t < minHit.t) {
 					hit = true;
 					minHit = tempMinHit;
@@ -1472,9 +1547,9 @@ public:
 	}
 
 	// camera -> screen matrix (given to you for A1)
-	float4x4 perspectiveMatrix(float fovy, float aspect, float zNear, float zFar) {
-		float4x4 m = float4x4(0.0f);
-		float f = 1.0f / (tan(fovy * DegToRad / 2.0f));
+	float4x4 perspectiveMatrix(float fovy, float aspect, float zNear, float zFar) const {
+		float4x4 m;
+		const float f = 1.0f / (tan(fovy * DegToRad / 2.0f));
 		m[0] = { f / aspect, 0.0f, 0.0f, 0.0f };
 		m[1] = { 0.0f, f, 0.0f, 0.0f };
 		m[2] = { 0.0f, 0.0f, (zFar + zNear) / (zNear - zFar), -1.0f };
@@ -1484,13 +1559,13 @@ public:
 	}
 
 	// model -> camera matrix (given to you for A1)
-	float4x4 lookatMatrix(float3 _eye, float3 _center, float3 _up) {
+	float4x4 lookatMatrix(const float3& _eye, const float3& _center, const float3& _up) const {
 		// transformation to the camera coordinate
-		float4x4 m = float4x4(0.0f);
-		float3 f = normalize(_center - _eye);
-		float3 upp = normalize(_up);
-		float3 s = normalize(cross(f, upp));
-		float3 u = cross(s, f);
+		float4x4 m;
+		const float3 f = normalize(_center - _eye);
+		const float3 upp = normalize(_up);
+		const float3 s = normalize(cross(f, upp));
+		const float3 u = cross(s, f);
 
 		m[0] = { s.x, s.y, s.z, 0.0f };
 		m[1] = { u.x, u.y, u.z, 0.0f };
@@ -1499,28 +1574,30 @@ public:
 		m = transpose(m);
 
 		// translation according to the camera location
-		float4x4 t = float4x4{ {1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}, { -_eye.x, -_eye.y, -_eye.z, 1.0f} };
+		const float4x4 t = float4x4{ {1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}, { -_eye.x, -_eye.y, -_eye.z, 1.0f} };
 
 		m = mul(m, t);
 		return m;
 	}
 
 	// rasterizer
-	void Rasterize() {
+	void Rasterize() const {
 		// ====== implement it in A1 ======
 		// fill in plm by a proper matrix
-		float4x4 plm;
+		const float4x4 pm = perspectiveMatrix(globalFOV, globalAspectRatio, globalDepthMin, globalDepthMax);
+		const float4x4 lm = lookatMatrix(globalEye, globalLookat, globalUp);
+		const float4x4 plm = mul(pm, lm);
 
 		FrameBuffer.clear();
-		for (int n = 0; n < objects.size(); n++) {
-			for (int k = 0; k < objects[n]->triangles.size(); k++) {
+		for (int n = 0, n_n = (int)objects.size(); n < n_n; n++) {
+			for (int k = 0, k_n = (int)objects[n]->triangles.size(); k < k_n; k++) {
 				objects[n]->rasterizeTriangle(objects[n]->triangles[k], plm);
 			}
 		}
 	}
 
 	// eye ray generation (given to you for A2)
-	Ray eyeRay(int x, int y) {
+	Ray eyeRay(int x, int y) const {
 		// compute the camera coordinate system 
 		const float3 wDir = normalize(float3(-globalViewDir));
 		const float3 uDir = normalize(cross(globalUp, wDir));
@@ -1537,13 +1614,13 @@ public:
 	}
 
 	// ray tracing (you probably don't need to change it in A2)
-	void Raytrace() {
+	void Raytrace() const {
 		FrameBuffer.clear();
 
 		// loop over all pixels in the image
 		for (int j = 0; j < globalHeight; ++j) {
 			for (int i = 0; i < globalWidth; ++i) {
-				Ray ray = eyeRay(i, j);
+				const Ray ray = eyeRay(i, j);
 				HitInfo hitInfo;
 				if (intersect(hitInfo, ray)) {
 					FrameBuffer.pixel(i, j) = shade(hitInfo, -ray.d);
@@ -1554,7 +1631,7 @@ public:
 
 			// show intermediate process
 			if (globalShowRaytraceProgress) {
-				const int scanlineNum = 64;
+				constexpr int scanlineNum = 64;
 				if ((j % scanlineNum) == (scanlineNum - 1)) {
 					glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, globalWidth, globalHeight, GL_RGB, GL_FLOAT, &FrameBuffer.pixels[0]);
 					glRecti(1, 1, -1, -1);
@@ -1574,7 +1651,7 @@ static Scene globalScene;
 
 // ====== implement it in A2 ======
 // fill in the missing parts
-static float3 shade(HitInfo hit, const float3 viewDir, const int level) {
+static float3 shade(const HitInfo& hit, const float3& viewDir, const int level) {
 	if (hit.material->type == MAT_LAMBERTIAN) {
 		// you may want to add shadow ray tracing here in A2
 		float3 L = float3(0.0f);
@@ -1585,7 +1662,7 @@ static float3 shade(HitInfo hit, const float3 viewDir, const int level) {
 			float3 l = globalScene.pointLightSources[i]->position - hit.P;
 
 			// the inverse-squared falloff
-			float falloff = length2(l);
+			const float falloff = length2(l);
 
 			// normalize the light direction
 			l /= sqrtf(falloff);
@@ -1712,7 +1789,7 @@ public:
 
 	void(*process)() = NULL;
 
-	void start() {
+	void start() const {
 		if (globalEnableParticles) {
 			globalScene.addObject(&globalParticleSystem.particlesMesh);
 		}

@@ -21,6 +21,7 @@ static void A0(int argc, const char* argv[]) {
 // setting up lighting
 static PointLightSource light;
 static void setupLightSource() {
+    //light.position = float3(0.5f, 4.0f, 1.0f); // use this for sponza.obj
     light.position = float3(3.0f, 3.0f, 3.0f);
     light.wattage = float3(1000.0f, 1000.0f, 1000.0f);
     globalScene.addLight(&light);
