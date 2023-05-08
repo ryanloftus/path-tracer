@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+	<title>CS 488/688: Introduction to Computer Graphics</title>
+
+	<!-- Bootstrap -->
+	<link href="bootstrap/css/bootstrap.min.css" rel="stylesheet">
+
+	<!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+	<!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+	<!--[if lt IE 9]>
+	<script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+	<script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+	<![endif]-->
+
+	<!-- Custom styles for this template -->
+	<link href="bootstrap/css/carousel.css" rel="stylesheet">
+
+	<style>
+		/* Customize container */
+		@media (min-width: 800px) {
+			.container {
+				max-width: 800px;
+			}
+		}
+		.container-narrow > hr {
+			margin: 30px 0px;
+		}
+		dd {
+			padding-bottom: 10px;
+			padding-left: 10px;
+		}
+		dl {
+			padding-bottom: 0px;
+		}
+	</style>
+</head>
+
+
+<body role="document">
+
+
+<div class="container" role="main">
+<center>
+	<h2>CS 488/688: Introduction to Computer Graphics</h2>
+	<h4>Assignment 3: Animation</h4><hr>
+</center>
+
+
+<h3>Summary</h3>
+
+<p>
+3D computer graphics is not just about generating images of 3D objects. It is equally important to generate an animation of 3D objects. While there are many different ways to define animation of 3D objects, one common approach is to numerically simulate the dynamics of real-world objects according to physics, commonly called physics-based animation. In this assignment, you will implement a simple physics-based animation system.  
+</p>
+
+<div class="alert alert-info" role="alert">
+You can use your own extended <code>cs488.h</code> from A1 and A2 as a starting point. This assignment is mostly dependent on having correct rasterization implemented in A1, or at least ray-triangle intersection in A2. If you failed all those in A1 and A2 and could not fix any of those to draw something reasonable until now, we can use our reference implementation to grade your code, if necessary. Just being able to rasterize points would be sufficient though. Make sure to state it in README if it is the case.
+</div>
+
+<div class="alert alert-warning" role="alert">
+Just like A1 and A2, do NOT use existing physics-based animation libraries (or any external sources) and call this assignment done. You will get zero points. Remember that this course is not about how to use such libraries and APIs. We would rather want to to be able to make such a library by yourself!
+</div>
+
+<div class="alert alert-info" role="alert">
+In this assignment, you can utilize an animated GIF output of the base code. The recording of rendered images starts by pressing the "F" key, and by pressing the "F" key again, the result will be saved as an animated GIF. Include animated GIFs or video captures in your submission to demonstrate your results. Do not record too long or use a high resolution, or your GIF file will be huge.
+</div>
+
+<h3>Task 0: main.cpp</h3>
+<p>
+Comment out <code>A2(argc, argv)</code> and comment in <code>A3(argc, argv)</code> to enable a simple setup code in <code>main.cpp</code>. Unless your ray tracing code somehow support efficient rendering of dynamic scenes, you will likely need to stick with the rasterization mode in this assignment. Here's what you would see.
+</p>
+<center>
+	<img style="max-width : 75%" src="a3_res/t0.png"/>
+</center><br>
+<div class="alert alert-warning" role="alert">
+Do not feed any .obj file in the command line argument for now. Be sure to comment out any additional ray tracing code path you might have in the <code>shade</code> function. Otherwise, your rendering will be extremely slow or broken (if you implemented BVH for static scenes). You might want to disable illumination computation and just return the reflectance to check your results. 
+</div>
+
+
+<h3>Task 1: Time integration and gravity</h3>
+<p>
+There are two classes that are relevant for this assignment; <code>Particle</code> and <code>ParticleSystem</code>. The <code>Particle</code> class is about each particle, and the <code>ParticleSystem</code> is about a collection of particles. The base code already includes some code for rendering particles which renders particles as little triangles that are facing toward the screen. Both positions and velocities of particles are randomly initialized. Fill in the missing part of the <code>Particle::step()</code> so that the particles now fall down under the gravity force defined by <code>const float3 globalGravity</code> with the time step size <code>deltaT</code>. You will see something like this if it works. You may use any time integration scheme, though position-based approaches might be easier for later tasks. Explain what method you use in README.
+</p>
+<center>
+	<img style="max-width : 75%" src="a3_res/t1.gif"/>
+</center><br>
+
+
+
+<h3>Task 2: Simple collision</h3>
+<p>
+Add collision against a box of [-0.5, 0.5] &times; [-0.5, 0.5] &times; [-0.5, 0.5] so that particles are contained within this box all the time. Add a proper collision response. Be sure to explain what you did in README.
+</p>
+<center>
+	<img style="max-width : 75%" src="a3_res/t2.gif"/>
+</center><br>
+
+
+
+
+<h3>Task 3: Constraints</h3>
+<p>
+Add some constraints on the dynamics of particles (e.g., particles are connected to each other, particles are moving only on a spherical surface, etc.) Be sure to explain what you did in README. Here is an example of particles moving on a spherical surface. You can turn off the collision in Task 2 if you want.
+</p>
+<center>
+	<img style="max-width : 75%" src="a3_res/t3.gif"/>
+</center><br>
+
+
+<h3>Task 4: Particle-particle interaction</h3>
+<p>
+Implement some particle-particle interaction. Pick up one of those explained in the lecture. You will need to modify the <code>ParticleSystem</code> class to access all the particles. Be sure to explain what you did in README. Here is an example of particles moving on a spherical surface. You can turn off the constraint and the collision, if you want. We might provide an example here later.
+</p>
+
+
+<h3>Task 5: Spherical particles</h3>
+<p>
+So far, particles are basically just points. It would be more realistic if each particle is actually a small sphere instead. It means that you need to consider the radius of each particle (sphere) into account in your simulation. Add proper collisions so that particles now behave as small spheres. Here is an example with the constraint in Task 3. You can see that spheres are not perpetrating each other.
+</p>
+<center>
+	<img style="max-width : 75%" src="a3_res/t5.gif"/>
+</center><br>
+ <div class="alert alert-info" role="alert">
+The base code is capable of drawing something other than a little triangle for each particle. Load smallsphere.obj in the command line arguments and it will use this triangle mesh for each particle and compute its radius. You may want to reduce the number of spheres to make your program runs reasonably fast. 
+</div>
+<div class="alert alert-warning" role="alert">
+Do not attempt to load a complicated .obj file since the total number of triangles you will have is the number of particles times the number of triangles within the .obj file!
+</div>
+
+<h3>Extras</h3>
+<p>
+These are optional extra tasks for those of you who would like more challenges and potentially gain extra points. Specification of an extra task is intentionally very-high level. Explain what you did in README if you want an extra point. You may or may not receive an extra point depending on our evaluation.
+</p>
+
+<h3>Extra 1: Faster simulation</h3>
+<p>
+OK, now you see the pattern. Yes, make your physics simulation as fast as possible. However, for this time, you want to make your system scales well for a larger number of particles because usually that is where your computation increases. How many particles you can handle interactively? Report the performance boost. Consider algorithmic changes such as clustering for multibody dynamics and collision detection. You can also do any further optimization, except for using other libraries or APIs. 
+</p>
+
+<h3>Extra 2: Collision with static triangle meshes</h3>
+<p>
+Add collision with static triangle meshes. There should be appropriate collision responses. Triangle meshes do not respond to particle collisions (i.e., they are static). 
+</p>
+
+
+
+
+
+<h3>What to submit</h3>
+<p>
+The submission process for this assignment is basically the same as the one for Assignment 0. Prepare a ZIP file of your code, omitting unnecessary files (executables, build files, etc.). Upload the ZIP file to LEARN.
+</p>
+<p>You <em>must</em> submit the <code>README</code>. In this assignment, you also need to submit videos or animated GIFs to demonstrate what you achieved in each task. Name them as <code>screenshotTask2.gif</code> etc., to clarify which task you are referring to. If you omit either of the files, you will receive a deduction. See <a href="a0.html">Assignment 0</a> for instructions about how to prepare these files. 
+</p>
+<div class="alert alert-info" role="alert">
+You have a great degree of freedom regarding how to set up your particle system in this assignment. Be creative but make sure that your configuration shows you did each task correctly.
+</div>
+<p>
+If you do extend the base code, be sure to document your extensions in your <code>README</code> file. Keep in mind that
+you must still satisfy the core objectives listed here. If your changes are so radical that your modified program is 
+incompatible with the original specification, you must include a "compatibility mode" that makes the interface behave like the requirements here, or consider creating an entirely separate project (but hey, is that making sense?).
+</p>
+<p>
+If you are using your own .obj file to render images, be sure to include them in your submission. That being said, do not include a too large .obj file. 
+</p>
+
+
+
+
+<h3>Other thoughts</h3>
+<p>
+Once you complete this assignment, now your system can render dynamic scenes (i.e., particles) with rasterization and render static scenes with either rasterization and ray tracing (or even a hybrid of both!). It is now a good time to finalize your plan for the final project. The due day for the proposal will be within a few days after the deadline of this assignment. There are so many things that you can do on top of it, so think about what you liked throughout the assignments and extend them.
+</p>
+
+
+
+<h3>Objectives</h3>
+<p>
+Every assignment includes a list of objectives. Your mark in the assignment will be based primarily on the achievement of these objectives, with possible deductions outside the list if necessary.
+</p>
+
+<ol>
+	<li>
+	Particles are falling under the gravity force according to the equation of motion.
+	</li>
+	<li>
+	Collision detection and response with the box are working properly.
+	</li>
+	<li>
+	Some constraints on the motion of particles are implemented.
+	</li>
+	<li>
+	Some form of particle-particle interaction is implemented.
+	</li>
+	<li>
+	Spherical particles consider proper collisions among them.
+	</li>
+</ol>
+
+
+
+
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+    <script src="bootstrap/js/bootstrap.min.js"></script>
+  </body>
+</html>

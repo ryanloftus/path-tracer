@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+    <title>CS 488/688: Introduction to Computer Graphics</title>
+
+    <!-- Bootstrap -->
+    <link href="bootstrap/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+      <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+	 <!-- Custom styles for this template -->
+    <link href="bootstrap/css/carousel.css" rel="stylesheet">
+
+	<style>
+		/* Customize container */
+		@media (min-width: 768px) {
+			.container {
+				max-width: 730px;
+			}
+		}
+		.container-narrow > hr {
+			margin: 30px 0px;
+		}
+
+		dd {
+			padding-bottom: 10px;
+			padding-left: 10px;
+		}
+
+		dl {
+			padding-bottom: 0px;
+		}
+	</style>
+  </head>
+  <body role="document">
+	<div class="container" role="main">
+	<center>
+    <h2>CS 488/688: Introduction to Computer Graphics</h2>
+    <h4>Course Project</h4>	<hr/>
+	</center>
+
+
+<!--
+    Note that both proposals <b>must</b> be submitted in printed form, and
+    that the final project report must be submitted in <b>both</b> printed form and
+    in Learn, with the code for your project also being submitted in Learn.
+    Further, the printed copy of your final project report <b>must be bound</b>.
+-->
+
+
+<h3>Summary</h3>
+
+<h4>Purpose</h4>
+<ul>
+	<li>Demonstrate your grasp of computer graphics.</li>
+	<li>Implement a (set of) graphics algorithms of your own choosing.</li>
+	<li>Use these graphics algorithms in an interesting context.</li>
+</ul>
+
+<p>
+This assignment is the culmination of your efforts. Its primary purpose is to allow you to plan and execute a project of your own creation. Do something interesting. Write a program that does something graphical:
+</p>
+
+<ul>
+<li>Invent a lighting or appearance model&hellip;</li>
+<li>Make an innovative use of the hardware features&hellip;</li>
+<li>Simulate the {physics,dynamics,behaviour} of something&hellip;</li>
+<li>or&hellip;</li>
+</ul>
+
+<h4>Project breakdown</h4>
+
+<p>
+The project is broken into three goals.  
+<!--
+<b>Each of these three goals must be submitted as a printed copy.</b>
+-->
+The first two goals are project proposals.  We will grade and comment your first proposal and return it to you.  The second goal is a resubmission of your project proposal, revised according to our comments.  We will keep this version of your proposal and use it to grade your project.  The third goal is the final project itself, which will receive both an objective mark and a subjective mark.
+</p>
+<p>
+What we want in your proposals is an objective list (like those found in the assignments) and supporting documentation that clearly defines these objectives.  The objective mark of your project will be based on this objective list. The rest of this page describes what we expect for a project and what we want in the proposals.
+</p>
+
+<hr/>
+<h4 id="first">First goal: proposal submission</h4>
+
+<p>
+You submit a statement of what you intend to do <em>in the format of a course assignment</em>.
+</p>
+<p>
+<div class="alert alert-info" role="alert">
+Your proposal will be read by the TA and instructor, and you will receive criticisms, advice, and suggestions on what you propose.  These must be taken into account when submitting your revised proposal.<b>You will not receive any grade for the revised proposal</b>. The project itself is the means by which the revised proposal is turned into credit. It thus benefits you to do a good job in the first proposal.
+</div>
+<div class="alert alert-warning" role="alert">
+You must achieve at least one objective to receive any credit for your proposal.  In particular, if you do not attempt a final project, you will receive 0 marks for your proposal regardless of the grade you achieved when it was first marked. 
+</div>
+<div class="alert alert-warning" role="alert">
+It might be tempting to propose to replace software rasterization and ray tracing in the base code by GPU implementation. However, doing so does not involve much of technical challenges in terms of 3D graphics, and it is more of coding tasks. We thus ask you to avoid making such a proposal in general. You may still consider doing so just to make your code runs faster in general (which can be a few objectives), but that should not be an entire project.
+</div>
+
+<p>
+We encourage you to use LaTeX to prepare your proposal.  LaTeX is the absolute standard for scholarly writing. You can download the file <a href="proposal.tex"><code>proposal.tex</code></a> to use as a starting point. You may want to use <a href="https://www.overleaf.com/edu/uwaterloo">Overleaf</a> to work on it. While it says that undergraduate students are not eligible for our site agreement, a free account is sufficient and is already way better than setting up LaTeX locally in our opinions.
+</p>
+<p>
+Your proposal should including the following sections:
+</p>
+<ul>
+<li>A <b>Topics/Purpose</b> list.</li>
+<li>A general, introductory <b>Statement</b> of the nature of the project.  </li>
+<li>A <b>Technical Outline</b> section surveying the important data structures and algorithms that will be necessary to achieve the goals.</li>
+<li>An <b>Objectives</b> sheet containing <b>EIGHT</b> different points upon which the achievement of the stated goals are to be judged. You should list any extra objective you implemented for the earlier assignment at the bottom of this list as a reminder for the instructor and the TAs.</li>
+<li>A <b>Bibliography</b> of a small number of papers and/or books that will be consulted, with a comment about the relevance of each to the project.</li>
+</ul>
+
+<div class="alert alert-warning" role="alert">
+While part of your grade will be based upon your success at reaching your goals, another part of your grade will be based upon your comprehension and good sense at setting goals that are neither too hard to be achieved nor too easy to be significant. Originality will count as well. We call it a "subjective mark".
+</div>
+
+<h4>Proposal grading</h4>
+
+<p>
+The TAs and instructor give points to your first proposal subjectively, by comparing the proposals against each other and against expectations. What we want to see in your proposal is that you have investigated what you plan to do for your project, and that you have decided upon a reasonable project.  To receive full marks for the first proposal, you need to have 
+<p>
+<ul>
+	<li>A clear description of your project; </li>
+	<li>An outline of the technical details that indicate that you understand the issues involved;</li>
+	<li>Appropriate technical references from reference books, texts, journals, and conference literature;</li>
+	<li>A list of non-trivial, pertinent, obtainable objectives.</li>
+	<li>Some amount of originality in what you propose.</li>
+</ul>
+
+<p>
+If you are vague about your plans or objectives, if you are too ambitious or have unrealistic objectives, or if it is clear that you have not read up on your chosen subject, you will lose points.
+</p>
+
+<div class="alert alert-warning" role="alert">
+Be sure to mention in your proposal what your official extra objectives achieved were in the earlier assignments.
+</div>
+
+<hr/>
+<h4 id="second">Second goal: revised proposal</h4>
+
+<p>
+Based on the feedback you receive from the TA and/or instructor, you must submit a revised copy of your proposal, including a revised objective list.  While no points will be explicitly assigned to the revised proposal, <em>the objective list of the revised proposal will be used to determine the objective mark of your project.</em> No changes to your objective list will be allowed after you submit your revised proposal.
+</p>
+
+<hr/>
+<h4 id="third">Third goal: project completion</h4>
+
+<p>
+You obviously need to complete your code. Besides, your <code>README</code> should now contain
+</p>
+<ol>
+	<li>A brief description about your program. What does it do?</li>
+	<li>The usual <code>README</code> content telling us how to run your program.</li>
+	<li><p>An extra <b>implementation</b> section that describes some software considerations, where appropriate, about </p>
+		<ul>
+			<li>Algorithms, data structures, and complexities,</li>
+			<li>Platform and system dependence or independence, global constants and configurability,</li>
+			<li>Input/output syntax, pre- and post-processing,</li>
+			<li>Data and code sources, the re-use and adaptation of existing code, any acknowledgment of external sources.</li>
+			<li>Caveats, bugs, cautions, assumptions.</li>
+		</ul>
+	</li>
+	<li>At the end of your <code>README</code>, <b>you should list your objectives</b>. </li>
+</ol>
+
+<p>
+For <b>graduate students (688) only</b>, include <em>a short</em> report on the main points of the technical details used in the project. We expect something like methods sections in technical papers. We generally apply higher standards for graduate students.
+</p>
+
+<h4 id="demo">Demo video</h4>
+
+<p>
+Students will provide a video demonstrating their projects as part of their project submission. Use capture software to create a video will probably give you better quality. Avoid using your phone to capture your monitor. 
+</p>
+<p>
+We're not looking for a production quality video here.  We're guessing most demo videos will be less than or around 5 minutes long, but if you can demonstrate your objectives in less time, that's definitely preferred. If you find yourself going well over 5 minutes, then you need to rethink your demo. </p>
+<!--
+Students will demonstrate their projects at the end of the term;
+either a sign-up sheet will be posted on the instructor's door or an 
+online sign-up system will be used.  
+-->
+<p>
+The purpose is for you to show that you have met your objectives, to show any extra features you have added, and to make clear what particular strong points you feel your project offers in any subjective categories. Therefore, you should base your demonstration around your objectives and around any of its subjective merits.
+<!--
+Your objective points will be awarded during the demo.
+The subjective points are determined by the Instructor and the
+TA(s) as they explore your project again at a later time.
+-->
+</p>
+<!--
+<p>
+Only the TA, the instructor, and the student giving
+the demo will be allowed in the lab during the
+demonstration.  Approximately 10&ndash;15 minutes will be given for each
+demo.  You should rehearse your demonstration ahead of time, and 
+make sure all your data files and executables are set up
+properly beforehand.
+</p>
+-->
+<p>
+Be sure that your demo illustrates that your objectives have been met. For example, you should provide data and graphs both in your README and your video to demonstrate non-graphical objectives such as optimization. 
+</p>
+
+<ul>
+<!--
+	<li><b>Please download and modify the <a href="marksheet.zip">
+		project marking sheet</a> and bring a printed copy to your demo.
+		We will use it to mark your objectives and make notes as you
+		give your demo. You will immediately lose subjective marks if
+		you don't bring this print out with you.</b></li>
+-->
+	<li>Ideally, demonstrate your objectives in the order in which they appeared in your revised proposal. Likewise, if you didn't complete an objective, state that in your demo.</li>
+	<li>Make sure you've tested your program. </li>
+	<li>There should be no reason to recompile or edit things during the demo.</li>
+	<li>For interactive projects:
+		<ul>
+		<li>You may want to toggle features such as texture mapping, shadows, reflection etc. in your program, rather than making a separate program for each.
+		<li>You may want to implement a cheat/god mode to demonstrate some objectives, if your program is like a video game. For example, if you implement some advanced rendering effect that shows up when you hit 5 moving targets in a row, a cheat mode where you never miss will be useful and maybe even necessary. Remember that it is a graphics course, not a game course.
+		</ul>
+	</li>
+	<li>For non-interactive projects:
+		<ul>
+		<li>Each objective should have 1 or 2 images (for comparison) to illustrate you have completed that objective. These images should not be your final scene and should preferably demonstrate 1 objective only. Rehearse showing your images. You don't want to search to find the image that shows your objective during the demo.</li>
+		<li>Be sure to explain what you implemented and what to look for in each image.</li>
+		</ul></li>
+</ul>
+
+<h4>What to submit</h4>
+<p>
+Prepare and upload a ZIP file, omitting unnecessary files (executables, build files, etc.).  Make sure to include at least the following addional files:
+</p>
+<ul>
+<li><b>A <code>README</code> file</b>, as usual. Your <code>README</code> needs to contain a description of how to run your project (command line options, etc), a brief description of the user interface (so that we can run your project if we so desire), and your objective list. If you use external models, images, etc., credit where you got them from.  
+</li>
+<li><b>A screenshot</b>, in the file <code>screenshot.png</code>. The screenshot should be of your best image of your project. You may submit additional images depending on the nature of your project.</li>
+<li><b>A demo video</b>, in the file <code>video.mp4</code>  (or whatever appropriate extension) as described above.</li>
+<li><b>A report</b>, in the file <code>report.odf</code> for 688 students only.</li>
+</ul>
+
+<hr/>
+
+
+<h4>Grading</h4>
+
+<p>
+Your project will have both an objective mark (based on your objective list) and a subjective mark. The subjective grade for your project will be based upon a subjective assessment by us, the instructor and TA(s), of how your project ranked against the others submitted this term, as well as projects like yours submitted on past terms. The subjective mark will be assigned somewhat like the judging in Olympic figure skating (minus the bribes). Your list of objectives provides the scores for the "required elements", and our assessment provides the scores for the "individual merit". The individual merit judgment will be arrived at by considering the four components of "artistic and/or innovative content", "technical depth", "software design", and "quality of documentation". This judgment will, necessarily, be subjective, given the wide diversity of projects. In the past we have used such criteria as:
+</p>
+<ul>
+	<li>Technical.  Algorithms, mathematics, physical or optical simulation, data structures.</li>
+	<li>Hardware techniques.  Use of hardware features above and beyond those in the assignments.</li>
+	<li>Code.  Comments, modularity, code design.</li>
+	<li>Documentation. Quality, thoroughness, and depth of documentation,  background references, literature summaries, breadth of resources employed.</li>
+	<li>Difficulty.  This category is used to reward exceptionally difficult projects.</li>
+</ul>
+
+<p>
+These criteria are an example, and they may change to suit the content mix of each term's projects. Nobody's project is expected to hit all these criteria, so we are prepared to give up to 3 points in any category. We will stop when we get to 10 subjective points, although achieving 10 points is extremely rare. On the average, good projects receive 4 to 6 subjective points, and only unusually, outstandingly, remarkably excellent projects are in the 8 to 10 range. The TA and instructor will be as fair as possible, but standards will be high, and a "perfect 10" will not be given lightly. We are looking for polish, depth, professionalism. We are trying to find the remarkable, and locate evidence of care, thought, effort, and skill that puts the project above one that just managed to get its technical objectives.
+</p>
+<p>
+The instructor will tell you how your subjective mark was determined if you ask.  However, the subjective mark is subjective; it's our opinion. If we overlooked something in our marking, then we may increase your subjective mark. However, if it is a matter of your opinion vs. our opinion, then we won't change your subjective mark. If you feel your project is the coolest-ever, but we don't, then we won't change your mark. 
+</p>
+<p>
+A note about pure image synthesis (e.g., ray tracing) projects: In addition to written documentation, you are expected to have test images that exhibit the features you have implemented.  It is insufficient to just submit your "nice image". Further, if you implement an optimization technique, you should give timing comparisons for the renderer running both with and without your optimisations. Your documentation should state where in your code these efficiency improvements are implemented. If any background references were used, summarize these in your documentation.
+</p>
+
+
+<hr/>
+<h3>Collected wisdom</h3>
+
+<p>
+The following are our thoughts on various projects: what worked, what
+didn't work, etc.
+</p>
+
+<h4>Finding a project</h4>
+
+<p>
+There are several ways to find a project. First, you may have seen something in the course that you want to learn more about. This is the ideal case: just follow up on what you are interested in and see if you can make it into a project. The second way to find a project is to look for an interesting topic in a textbook, or through papers published at computer graphics conferences such as SIGGRAPH, SIGGRAPH Asia, and Eurographoics. You can often find such technical papers online.
+</p>
+<p>
+In both cases, you should try to find a project that is neither too hard nor too easy. The first step in deciding if a project is just right is to make up a list of objectives. Further, you should look at the list of subjective marks upon which we grade your project, and try to decide what subjective marks you could hope to get from your project.
+</p>
+<p>
+As a general comment, think of the final overall effect you want from your project and come up with objectives for that effect, rather than think up objectives and build a project around it. For example, rather than say "I want to add various relevant features to my ray tracer", it'd be better to say "I would like to render realistic cloths and here is a list of required features that I plan to implement". The objectives can roughly be the same, but the latter results in a cohesive project, while the former results in an unsatisfying project even if all the objectives are met.
+</p>
+<p>
+If you have questions about what makes a reasonable project, ask the instructor or the TA. In the past, students who discussed their project with the instructor <b>before</b> submitting their first proposal would generate much better proposals and ultimately have better projects than those who did not see the instructor.
+</p>
+
+
+<h4>Projects to be wary of</h4>
+<p>
+In the past, some projects have worked better than other projects. Here's some projects that we won't accept unless you extend them in a novel way:
+</p>
+<ul>
+	<li>Game without any new graphics features: You do not get a point by making a fun game. Make graphics as the central theme, not the game play itself.</li>
+	<li>Procedural modeling: While it is fine to use procedural modeling in your project, generally there isn't enough to make a full project. Providing lots of examples via procedural modeling does not really count.</li>
+	<li>Non-physics based animation: Animation that is driven by some heuristic rules is more of an art. Examples include (fake) fireworks and solar systems. Make it physics based instead. </li>
+</ul>
+<p>
+Here are some examples of projects that often (but not always) fare poorly when it comes to grading:
+</p>
+<ul>
+	<li>Character animation: It's harder than it looks to support animation. Moreover, making such an animation by yourself takes a lot of time and it does not really count technically. </li>
+	<li>Extended ray tracing: It's not that it is bad, but we've seen a lot of them so our standards are high. We at least expect working light transport simulation of some form (e.g., path tracing).</li>
+    <li>Modeling system: A general purpose modeller is hard to implement. If you want to implement a modeller, design it to build something specific and expect to spend a lot of time using your modeller to make an interesting model (which again does not count much technically).</li>
+</ul>
+
+
+<h4>Rasterization and ray tracing</h4>
+<p>
+One of the big decisions might be whether to do rasterization or ray tracing. In general, rasterization is suitable for interactive projects and ray tracing is suitable for non-interactive projects, but this division is not as clear as it's used to be anymore. There are in fact many recent examples of interactive ray tracing programs as of 2023. You can also do both at the same time, which is very common in some AAA video games as of 2023.
+</p>
+
+
+<h4>Proposal</h4>
+<p>
+The goals of your proposal are (a) to tell us what your project is and (b) convince that your project is reasonable in the sense that it's not to hard and not too easy.
+</p>
+
+
+<h4>Technical outline</h4>
+<p>
+In this section, you need to explain the important data structures and algorithms that will be necessary to achieve your objectives. 
+</p>
+<p>
+How well do you need to explain the data structures and algorithms? Well, you must convince us that you understand what is involved with each objective. For example, if you have bump mapping as one of your objectives, you must explain to us how you intend to map the bump map to each primitive, how the normals are perturbed, etc. If you are implementing something from a paper, it is not enough to refer to the paper, we expect you to list out the steps in the algorithm and include necessary equations. 
+</p>
+<p>
+When we read your objectives list, we will refer to your technical outline for details. A good technical outline will tell us exactly how you intend to achieve each objective.
+</p>
+
+
+<h4>Objectives</h4>
+<p>
+Briefly, an objective is a unit that contributes one fundamental, essential goal to your project. On the average, an objective is roughly 1/10 of your work. In a 2 to 3 week development time, it represents 1 to 2 days of planning, implementation, checking, and correction. A poorly done proposal is often characterized by attempting way too much, and that derives from not understanding clearly what is involved; either in terms of objectives or in the difficulty of each objective. You should also think about what kind of subjective marks you can get. If a project is too difficult, you may have trouble getting your objective marks.
+</p>
+<p>
+Examples of poor objectives for extending the ray tracer follows:
+</p>
+<ol>
+<li>Add light transport simulation.</li>
+<li>Add anti-aliasing.</li>
+</ol>
+<p>
+Both are too vague, although if adequately described in other places, they might be okay. Make sure you have some ideas about what it takes to achieve each objective. The first objective also too general and should be broken down. 
+</p>
+<p>
+Here are some other tings to avoid in your objectives list:
+</p>
+<ul>
+	<li>Reorganize the code.</li>
+	<li>Make the code well-commented.</li>
+	<li>Program executes correctly.</li>
+</ul>
+<p>
+These are expected to be true as a minimum or should be taken care by yourself, not as
+objectives worth special mention. You should also avoid objectives that talk about things you did not complete in the earlier assignments. Of course, you can fix and complete them, but you cannot count them as objectives in the final project.
+Finally, here are some examples that are too vague:
+</p>
+<ul>
+	<li>Interesting interaction.</li>
+	<li>Useful visual feedback given on screen.</li>
+	<li>Good use of colour.</li>
+</ul>
+<p>  
+What is the meaning of "interesting"? Who decides what is "useful" or "good"? The instructor and the TAs will have no clue what to look for. 
+</p>
+<p>
+In short: an objective should be precisely stated, clearly understood, capable of unambiguous determination about whether and to what degree it has been met.  If you are using words like 'nice' or 'easy' or 'useful' or 'simple' or 'interesting' or 'realistic' in your "objective", then it's probably subjective and should be changed. Your objectives should not rehash objectives of earlier assignments, and they should not address basic software engineering issues that every good CS student should have mastered by now. Concentrate on objectives that are addressed specifically to the unique points of your individual project. An objective is given as a short, simple, declarative statement.
+</p>
+<p>
+One other thing to be careful of when making goals: your goals should have some technical graphics content. We commonly allow one of each of the following as "easy" objectives
+</p>
+<ul>
+		<li>A modelling objective: This can be just something you want to render in the end.</li>
+		<li>An animation objective: if you are implementing an animation system, creating animations with it can be one objective. </li>
+		<li>A user interface objective: this objective can be used for some slightly complex interaction such as editing a triangle mesh. Manipulating the camera or saving images cannot count in your UI objective since they are already covered in the base code.</li>
+		<li>A game engine objective: this objective may not really have technical graphics content, but may be useful for games. Examples include a visual effect with particles.
+		</li>
+</ul>
+			<div class="alert alert-warning" role="alert">
+				Be wary if your project needs a lot of UI or I/O features. These are not worth a lot of subjective points, but they can still take up a lot of time. Better spent on achieving other objectives.
+			</div>
+<p>
+Unacceptable objectives are "feature" goals without any graphics content. This commonly happens with game projects. For such projects, playing sound, displaying a numeric score, or giving the player extra life when a food pod is consumed may be nice game features, but none of them are acceptable.
+</p>
+
+
+<h4>Bibliography</h4>
+<p>
+An excellent way to prepare for a good proposal, and to continue from there to a successful project, is to give evidence that you have informed yourself about the issues and the techniques.  You do this through reading some reference material.  An ideal preliminary source of ideas can be provided by looking in the index or table of contents of the texts, both required and recommended, for topics of interest. These texts will often point off to the literature for further reading. Including <b>specific</b> pertinent references to the literature in your proposals is a good way to show that you know what you are doing. For example, on 3D textures,
+</p>
+
+<p>
+<b>Bad bibliography:</b>
+<blockquote>
+<b>Computer Graphics, C Version, Second Edition</b>, Hearn and Baker,
+Prentice Hall, 1997
+</blockquote>
+</p>
+
+<p>
+(This just lists a book containing information on hundreds of topics.)
+</p>
+
+<p>
+<b>Good bibliography:</b>
+<blockquote>
+<ul>
+<li><b>Computer Graphics, Principles and Practice, Third Edition</b>,
+Foley, et al., 2013, pp. 1015&ndash;1018.</li>
+<li><em>An Image Synthesizer</em>, Perlin, SIGGRAPH '85 Proceedings,
+	pp. 287&ndash;296.</li>
+<li><em>Solid Texturing of Complex Surfaces</em>, Peachy,
+	SIGGRAPH '85 Proceedings, pp. 279&ndash;286.</li>
+</ul>
+</blockquote>
+</p>
+
+<p>
+(This lists specific pages on the subject in a reference text, and it additionally lists two landmark conference articles on the subject.)
+</p>
+<p>
+If you use reference material on the internet, you should certainly list it in your bibliography, <em>but a website alone is not an acceptable reference</em>.  Websites detailing algorithms often list the source, so make sure you check those out as well.
+</p>
+
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+    <script src="bootstrap/js/bootstrap.min.js"></script>
+  </body>
+</html>
