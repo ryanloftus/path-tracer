@@ -33,6 +33,7 @@ using namespace linalg::aliases;
 #include <iostream>
 #include <vector>
 #include <cfloat>
+#include <ctime>
 
 
 // main window
@@ -53,6 +54,12 @@ constexpr float RadToDeg = 180.0f / PI;
 
 // for ray tracing
 constexpr float Epsilon = 5e-5f;
+static int maxLevel = 4;
+constexpr float etaAir = 1.0f; // 1.00029f;
+
+// for SAH BVH
+constexpr float Cb = 1.0f;
+constexpr float C0 = 1.0f;
 
 
 // amount the camera moves with a mouse and a keyboard
@@ -73,7 +80,7 @@ const float globalDistanceToFilm = globalFilmSize / (2.0f * tan(globalFOV * DegT
 bool globalEnableParticles = false;
 constexpr float deltaT = 0.002f;
 constexpr float3 globalGravity = float3(0.0f, -9.8f, 0.0f);
-constexpr int globalNumParticles = 300;
+constexpr int globalNumParticles = 1000;
 
 
 // dynamic camera parameters
@@ -609,7 +616,64 @@ struct Triangle {
 	float3 center;
 };
 
+bool isPointInsideLine(float px, float py, float3 p1, float3 p2, float3 p3) {
+	float3 tangent = p2 - p1;
+	float2 normal = {0-tangent.y, tangent.x};
+	float2 v = {px - p1.x, py - p1.y};
+	float insideLine = v.x * normal.x + v.y * normal.y;
+	if (insideLine > 0) {
+		return true;
+	} else if (insideLine == 0) {
+		// return true if top edge or left edge
+		return (tangent.y == 0 && p3.y < p1.y) || (tangent.y != 0 && normal.x < 0);
+	} else {
+		return false;
+	}
+}
 
+// return true if (px, py) contained within the triangle formed by tpoints, false otherwise
+bool isInsideTriangle(float px, float py, const float3 tpoints[]) {
+	bool l1 = isPointInsideLine(px, py, tpoints[0], tpoints[1], tpoints[2]);
+	bool l2 = isPointInsideLine(px, py, tpoints[1], tpoints[2], tpoints[0]);
+	bool l3 = isPointInsideLine(px, py, tpoints[2], tpoints[0], tpoints[1]);
+	return (l1 && l2 && l3);
+}
+
+float triangleArea(const float3 points[]) {
+	return 0.5f * 
+		abs(points[0].x * (points[1].y - points[2].y) + points[1].x * (points[2].y - points[0].y) + points[2].x * (points[0].y - points[1].y));
+}
+
+// uses px, py to Barycentric interpolate pz using points
+float barycentricInterpolateZ(const float3 points[], float3 p) {
+	float a = triangleArea(points);
+	float3 t0[3] = {p, points[1], points[2]};
+	float3 t1[3] = {p, points[0], points[2]};
+	float3 t2[3] = {p, points[0], points[1]};
+	float a0 = triangleArea(t0);
+	float a1 = triangleArea(t1);
+	float a2 = triangleArea(t2);
+	return (a0 / a) * points[0].z + (a1 / a) * points[1].z + (a2 / a) * points[2].z;
+}
+
+float2 interpolateTex(const float3 points[], float3 p, const float2 texCoords[], const float wRecip[]) {
+	float a = triangleArea(points);
+	float3 t0[3] = {p, points[1], points[2]};
+	float3 t1[3] = {p, points[0], points[2]};
+	float3 t2[3] = {p, points[0], points[1]};
+	float a0 = triangleArea(t0);
+	float a1 = triangleArea(t1);
+	float a2 = triangleArea(t2);
+	float interpolatedW = ((a0 / a) * wRecip[0] + (a1 / a) * wRecip[1] + (a2 / a) * wRecip[2]);
+	return {
+		((a0 / a) * texCoords[0][0] * wRecip[0] + (a1 / a) * texCoords[1][0] * wRecip[1] + (a2 / a) * texCoords[2][0] * wRecip[2]) / interpolatedW,
+		((a0 / a) * texCoords[0][1] * wRecip[0] + (a1 / a) * texCoords[1][1] * wRecip[1] + (a2 / a) * texCoords[2][1] * wRecip[2]) / interpolatedW
+	};
+}
+
+float det(float3 cola, float3 colb, float3 colc) {
+	return dot(cross(cola, colb), colc);
+}
 
 // triangle mesh
 static float3 shade(const HitInfo& hit, const float3& viewDir, const int level = 0);
@@ -641,6 +705,56 @@ public:
 		// you do not need to implement clipping
 		// you may call the "shade" function to get the pixel value
 		// (you may ignore viewDir for now)
+
+		float3 screenPoints[3];
+		float3 ndcPoints[3];
+		float W[3];
+
+		for (int k = 0; k < 3; k++) {
+			// apply transformations
+			float4 p = {tri.positions[k][0], tri.positions[k][1], tri.positions[k][2], 1.0f};
+			p = mul(plm, p);
+
+			// get NDC coordinates
+			ndcPoints[k] = {p.x / p.w, p.y / p.w, p.z / p.w};
+
+			// get screen coordinates
+			screenPoints[k] = {
+				(1.0f + ndcPoints[k].x) * FrameBuffer.width * 0.5f,
+				(1.0f + ndcPoints[k].y) * FrameBuffer.height * 0.5f,
+				ndcPoints[k].z
+			};
+			W[k] = 1.0f / p.w;
+
+			// TASK 2: get integer points and color them white
+			// int i = static_cast<int>(screenPoints[k].x);
+			// int j = static_cast<int>(screenPoints[k].y);
+			// if (FrameBuffer.valid(i, j)) {
+			// 	FrameBuffer.pixel(i, j) = float3(1.0f);
+			// }
+		}
+
+		// iterate over all pixels (x,y), check if (x,y) is inside the triangle, shade it
+		int smallestScreenX = (int)fmax(0.0f, fmin(fmin(screenPoints[0].x, screenPoints[1].x), screenPoints[2].x) - 1);
+		int smallestScreenY = (int)fmax(0.0f, fmin(fmin(screenPoints[0].y, screenPoints[1].y), screenPoints[2].y) - 1);
+		int largestScreenX = (int)fmin(FrameBuffer.width, fmax(fmax(screenPoints[0].x, screenPoints[1].x), screenPoints[2].x) + 2);
+		int largestScreenY = (int)fmin(FrameBuffer.height, fmax(fmax(screenPoints[0].y, screenPoints[1].y), screenPoints[2].y) + 2);
+		for (int x = smallestScreenX; x < largestScreenX; x++) {
+			for (int y = smallestScreenY; y < largestScreenY; y++) {
+				if (isInsideTriangle(x + 0.5f, y + 0.5f, screenPoints)) {
+					float ndcX = (x + 0.5f) * 2.0f / FrameBuffer.width - 1.0f;
+					float ndcY = (y + 0.5f) * 2.0f / FrameBuffer.height - 1.0f;
+					float ndcZ = barycentricInterpolateZ(ndcPoints, {ndcX, ndcY, 0.0f});
+					if (ndcZ < FrameBuffer.depth(x, y)) {
+						HitInfo hi;
+						hi.material = &materials[tri.idMaterial];
+						hi.T = interpolateTex(ndcPoints, {ndcX, ndcY, ndcZ}, tri.texcoords, W);
+						FrameBuffer.pixel(x, y) = shade(hi, {0.0f, 0.0f, 0.0f});
+						FrameBuffer.depth(x, y) = ndcZ;
+					}
+				}
+			}
+		}
 	}
 
 
@@ -649,6 +763,36 @@ public:
 		// ray-triangle intersection
 		// fill in "result" when there is an intersection
 		// return true/false if there is an intersection or not
+
+		float3 a = tri.positions[0] - tri.positions[1];
+		float3 b = tri.positions[0] - tri.positions[2];
+		float3 c = ray.d;
+		float3 d = tri.positions[0] - ray.o;
+
+		float D = det(a, b, c);
+		if (D != 0) {
+			float Da = det(d, b, c);
+			float Db = det(a, d, c);
+			float Dc = det(a, b, d);
+			float beta = Da / D;
+			float gamma = Db / D;
+			float alpha = 1 - beta - gamma;
+			float t = Dc / D;
+			if (
+				0 <= alpha && alpha <= 1 &&
+				0 <= beta && beta <= 1 &&
+				0 <= gamma && gamma <= 1 &&
+				tMin <= t && t <= tMax
+			) {
+				result.material = &materials[tri.idMaterial];
+				result.T = alpha * tri.texcoords[0] + beta * tri.texcoords[1] + gamma * tri.texcoords[2];
+				result.t = t;
+				result.N = normalize(alpha * tri.normals[0] + beta * tri.normals[1] + gamma * tri.normals[2]);
+				result.P = alpha * tri.positions[0] + beta * tri.positions[1] + gamma * tri.positions[2];
+				return true;
+			}
+		}
+
 		return false;
 	}
 
@@ -1235,14 +1379,15 @@ void BVH::sortAxis(int* obj_index, const char axis, const int li, const int ri) 
 }
 
 
-//#define SAHBVH // use this in once you have SAH-BVH
+#define SAHBVH // use this in once you have SAH-BVH
 int BVH::splitBVH(int* obj_index, const int obj_num, const AABB& bbox) {
-	// ====== exntend it in A2 extra ======
-#ifndef SAHBVH
+	// ====== extend it in A2 extra ======
 	int bestAxis, bestIndex;
 	AABB bboxL, bboxR, bestbboxL, bestbboxR;
-	int* sorted_obj_index  = new int[obj_num];
+	int* sorted_obj_index = new int[obj_num];
+	bool shouldSplit;
 
+#ifndef SAHBVH
 	// split along the largest axis
 	bestAxis = bbox.getLargestAxis();
 
@@ -1255,29 +1400,70 @@ int BVH::splitBVH(int* obj_index, const int obj_num, const AABB& bbox) {
 	// split in the middle
 	bestIndex = obj_num / 2 - 1;
 
-	bboxL.reset();
-	for (int i = 0; i <= bestIndex; ++i) {
-		const Triangle& tri = triangleMesh->triangles[obj_index[i]];
-		bboxL.fit(tri.positions[0]);
-		bboxL.fit(tri.positions[1]);
-		bboxL.fit(tri.positions[2]);
-	}
-
-	bboxR.reset();
-	for (int i = bestIndex + 1; i < obj_num; ++i) {
-		const Triangle& tri = triangleMesh->triangles[obj_index[i]];
-		bboxR.fit(tri.positions[0]);
-		bboxR.fit(tri.positions[1]);
-		bboxR.fit(tri.positions[2]);
-	}
-
-	bestbboxL = bboxL;
-	bestbboxR = bboxR;
+	// split until 4 or less objects
+	shouldSplit = (obj_num <= 4);
 #else
-	// implelement SAH-BVH here
+	float outerArea = bbox.area();
+	float cmin = INFINITY;
+
+	float* bboxAreasL = new float[obj_num];
+	float* bboxAreasR = new float[obj_num];
+
+	// iterate over each axis to find best one
+	for (int axis = 0; axis <= 2; ++axis) {
+		
+		// sorting along the axis
+		this->sortAxis(obj_index, axis, 0, obj_num - 1);
+		for (int i = 0; i < obj_num; ++i) {
+			sorted_obj_index[i] = obj_index[i];
+		}
+
+		// find surface areas of all possible bboxes used by greedy
+		bboxL.reset();
+		bboxR.reset();
+		for (int split_idx = 0; split_idx < obj_num; ++split_idx) {
+			int li = sorted_obj_index[split_idx];
+			int ri = sorted_obj_index[obj_num - split_idx];
+			const Triangle& leftTri = triangleMesh->triangles[li];
+			bboxL.fit(leftTri.positions[0]);
+			bboxL.fit(leftTri.positions[1]);
+			bboxL.fit(leftTri.positions[2]);
+			if (split_idx > 0) {
+				const Triangle& rightTri = triangleMesh->triangles[ri];
+				bboxR.fit(rightTri.positions[0]);
+				bboxR.fit(rightTri.positions[1]);
+				bboxR.fit(rightTri.positions[2]);
+			}
+			bboxAreasL[split_idx] = bboxL.area();
+			bboxAreasR[obj_num - split_idx - 1] = bboxR.area();
+		}
+
+		// find best index to split on using SAH
+		for (int i = 0; i < obj_num; ++i) {
+			// 2Cb + (Area(left) / Area(parent)) * 2C0 + (Area(right) / Area(parent)) * 2C0
+			float c = 2 * Cb + (bboxAreasL[i] * i + bboxAreasR[i] * (obj_num - i)) * C0 / outerArea;
+			if (c < cmin) {
+				cmin = c;
+				bestIndex = i;
+				bestAxis = axis;
+			}
+		}
+	}
+
+	// sorting along the axis
+	this->sortAxis(obj_index, bestAxis, 0, obj_num - 1);
+	for (int i = 0; i < obj_num; ++i) {
+		sorted_obj_index[i] = obj_index[i];
+	}
+
+	// split only when it is better to split
+	shouldSplit = (obj_num <= 4 || cmin > obj_num);
+
+	delete [] bboxAreasL;
+	delete [] bboxAreasR;
 #endif
 
-	if (obj_num <= 4) {
+	if (shouldSplit) {
 		delete[] sorted_obj_index;
 
 		this->nodeNum++;
@@ -1294,6 +1480,23 @@ int BVH::splitBVH(int* obj_index, const int obj_num, const AABB& bbox) {
 
 		return temp_id;
 	} else {
+		// use bestIndex to construct bestbboxes
+		bestbboxL.reset();
+		for (int i = 0; i <= bestIndex; ++i) {
+			const Triangle& tri = triangleMesh->triangles[sorted_obj_index[i]];
+			bestbboxL.fit(tri.positions[0]);
+			bestbboxL.fit(tri.positions[1]);
+			bestbboxL.fit(tri.positions[2]);
+		}
+
+		bestbboxR.reset();
+		for (int i = bestIndex + 1; i < obj_num; ++i) {
+			const Triangle& tri = triangleMesh->triangles[sorted_obj_index[i]];
+			bestbboxR.fit(tri.positions[0]);
+			bestbboxR.fit(tri.positions[1]);
+			bestbboxR.fit(tri.positions[2]);
+		}
+
 		// split obj_index into two 
 		int* obj_indexL = new int[bestIndex + 1];
 		int* obj_indexR = new int[obj_num - (bestIndex + 1)];
@@ -1423,9 +1626,29 @@ public:
 		float3 temp = position;
 
 		// === fill in this part in A3 ===
+		// TASK 1
 		// update the particle position and velocity here
-
+		position = position + (position - prevPosition) + powf(deltaT, 2) * globalGravity;
 		prevPosition = temp;
+
+		// TASK 2
+		// perform collisions on [-0.5, 0.5] x [-0.5, 0.5] x [-0.5, 0.5] box
+		// for (int i = 0; i < 3; ++i) {
+		// 	if (position[i] < -0.5f) {
+		// 		prevPosition[i] = 2 * -0.5f - prevPosition[i];
+		// 		prevPosition[i] += (-0.5f - position[i]);
+		// 		position[i] = -0.5f;
+		// 	} else if (position[i] > 0.5f) {
+		// 		prevPosition[i] = 2 * 0.5f - prevPosition[i];
+		// 		prevPosition[i] += (0.5f - position[i]);
+		// 		position[i] = 0.5f;
+		// 	}
+		// }
+
+		// TASK 3
+		// perform collisions on a sphere of radius 1 centered at the origin
+		// since r = 1 and c = 0, the formula for projecting position onto the sphere becomes position / ||position||
+		position = normalize(position);
 	}
 };
 
@@ -1512,6 +1735,19 @@ public:
 	std::vector<TriangleMesh*> objects;
 	std::vector<PointLightSource*> pointLightSources;
 	std::vector<BVH> bvhs;
+	Image envImage;
+
+	float3 ibl(const Ray& ray) {
+		if (envImage.height == 0) {
+			return float3(0.0f);
+		}
+		float r = (1.0f / PI) * acos(ray.d.z) / sqrtf(pow(ray.d.x, 2) + pow(ray.d.y, 2));
+		float u = ray.d.x * r;
+		float v = ray.d.y * r;
+		int i = (int)((u + 1.0f) * 0.5f * envImage.width);
+		int j = (int)((v + 1.0f) * 0.5f * envImage.height);
+		return envImage.pixel(i, j);
+	}
 
 	void addObject(TriangleMesh* pObj) {
 		objects.push_back(pObj);
@@ -1614,7 +1850,7 @@ public:
 	}
 
 	// ray tracing (you probably don't need to change it in A2)
-	void Raytrace() const {
+	void Raytrace() {
 		FrameBuffer.clear();
 
 		// loop over all pixels in the image
@@ -1625,7 +1861,7 @@ public:
 				if (intersect(hitInfo, ray)) {
 					FrameBuffer.pixel(i, j) = shade(hitInfo, -ray.d);
 				} else {
-					FrameBuffer.pixel(i, j) = float3(0.0f);
+					FrameBuffer.pixel(i, j) = this->ibl(ray);
 				}
 			}
 
@@ -1646,13 +1882,68 @@ public:
 };
 static Scene globalScene;
 
+static float3 reflectRay(const float3& viewDir, const HitInfo& hit, const int level) {
+	// steps:
+	// 1. find new ray's vector using formula from slides
+	// 2. find new ray's first hit using the intersect function
+	// 3. call shade on that point
+	float3 wi = -viewDir;
+	Ray reflectedRay;
+	float3 n = hit.N;
+	float wn = dot(wi, n);
+	if (wn < 0) {
+		wn = -wn;
+		n = -n;
+	}
+	reflectedRay.d = -2 * wn * n + wi;
+	reflectedRay.o = hit.P - Epsilon * n;
+	HitInfo nextHit;
+	bool isHit = globalScene.intersect(nextHit, reflectedRay);
+	if (isHit) {
+		return shade(nextHit, -reflectedRay.d, level+1);
+	} else {
+		return globalScene.ibl(reflectedRay);
+	}
+}
 
-
+static float3 refractRay(const float3& viewDir, const HitInfo& hit, const int level) {
+	float3 wi = -viewDir;
+	Ray refractedRay;
+	float eta1;
+	float eta2;
+	float wn = dot(wi, hit.N);
+	float3 n = hit.N;
+	if (wn < 0) {
+		eta1 = etaAir;
+		eta2 = hit.material->eta;
+	} else {
+		eta1 = hit.material->eta;
+		eta2 = etaAir;
+		wn = -wn;
+		n = -n;
+	}
+	float underRoot = 1 - powf(eta1 / eta2, 2) * (1 - powf(wn, 2));
+	if (underRoot < 0) {
+		// Total internal reflection
+		return reflectRay(viewDir, hit, level);
+	}
+	refractedRay.d = (eta1 / eta2) * (wi - wn * n) - (sqrtf(underRoot) * n);
+	refractedRay.o = hit.P - Epsilon * n;
+	HitInfo nextHit;
+	bool isHit = globalScene.intersect(nextHit, refractedRay);
+	if (isHit) {
+		return shade(nextHit, -refractedRay.d, level+1);
+	} else {
+		return globalScene.ibl(refractedRay);
+	}
+}
 
 // ====== implement it in A2 ======
 // fill in the missing parts
 static float3 shade(const HitInfo& hit, const float3& viewDir, const int level) {
-	if (hit.material->type == MAT_LAMBERTIAN) {
+	if (level > maxLevel) {
+		return float3(0.0f);
+	} else if (hit.material->type == MAT_LAMBERTIAN) {
 		// you may want to add shadow ray tracing here in A2
 		float3 L = float3(0.0f);
 		float3 brdf, irradiance;
@@ -1660,6 +1951,15 @@ static float3 shade(const HitInfo& hit, const float3& viewDir, const int level) 
 		// loop over all of the point light sources
 		for (int i = 0; i < globalScene.pointLightSources.size(); i++) {
 			float3 l = globalScene.pointLightSources[i]->position - hit.P;
+
+			// A2 code
+			// HitInfo dh;
+			// Ray ray;
+			// ray.d = -1 * l;
+			// ray.o = globalScene.pointLightSources[i]->position;
+			// if (globalScene.intersect(dh, ray) && distance(dh.P, ray.o) + Epsilon * 0.5f < distance(hit.P, ray.o)) {
+			// 	continue;
+			// }
 
 			// the inverse-squared falloff
 			const float falloff = length2(l);
@@ -1680,9 +1980,9 @@ static float3 shade(const HitInfo& hit, const float3& viewDir, const int level) 
 		}
 		return L;
 	} else if (hit.material->type == MAT_METAL) {
-		return float3(0.0f); // replace this
+		return hit.material->Ks * reflectRay(viewDir, hit, level);
 	} else if (hit.material->type == MAT_GLASS) {
-		return float3(0.0f); // replace this
+		return refractRay(viewDir, hit, level);
 	} else {
 		// something went wrong - make it apparent that it is an error
 		return float3(100.0f, 0.0f, 100.0f);
@@ -1805,6 +2105,7 @@ public:
 				globalParticleSystem.step();
 			}
 
+			// std::clock_t start = std::clock();
 			if (globalRenderType == RENDER_RASTERIZE) {
 				globalScene.Rasterize();
 			} else if (globalRenderType == RENDER_RAYTRACE) {
@@ -1812,6 +2113,8 @@ public:
 			} else if (globalRenderType == RENDER_IMAGE) {
 				if (process) process();
 			}
+			// double duration = (std::clock() - start) / (double) CLOCKS_PER_SEC;
+			// std::cout << duration << std::endl;
 
 			if (globalRecording) {
 				unsigned char* buf = new unsigned char[FrameBuffer.width * FrameBuffer.height * 4];

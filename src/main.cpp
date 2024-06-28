@@ -6,8 +6,8 @@ CS488Window CS488;
 static void draw() {
     for (int j = 0; j < globalHeight; j++) {
         for (int i = 0; i < globalWidth; i++) {
-            FrameBuffer.pixel(i, j) = float3(PCG32::rand()); // noise
-            //FrameBuffer.pixel(i, j) = float3(0.5f * (cos((i + globalFrameCount) * 0.1f) + 1.0f)); // moving cosine
+            //FrameBuffer.pixel(i, j) = float3(PCG32::rand()); // noise
+            FrameBuffer.pixel(i, j) = float3(0.5f * (cos((i + globalFrameCount) * 0.1f) + 1.0f)); // moving cosine
         }
     }
 }
@@ -45,6 +45,13 @@ static void setupScene(int argc, const char* argv[]) {
         printf("Making a single triangle instead.\n");
         mesh.createSingleTriangle();
     }
+    if (argc > 2) {
+        try {
+            globalScene.envImage.load(argv[2]);
+        } catch (...) {
+            printf("Invalid hdr file.");
+        }
+    }
     globalScene.addObject(&mesh);
 }
 static void A1(int argc, const char* argv[]) {
@@ -70,10 +77,10 @@ static void A3(int argc, const char* argv[]) {
 
 
 int main(int argc, const char* argv[]) {
-    A0(argc, argv);
+    //A0(argc, argv);
     //A1(argc, argv);
     //A2(argc, argv);
-    //A3(argc, argv);
+    A3(argc, argv);
 
     CS488.start();
 }

@@ -2,3 +2,13 @@ build
 cmake-build-debug
 cmake-build-release
 cmake-build-relwithdebinfo
+.vscode
+CMakeFiles
+cmake_install.cmake
+CMakeCache.txt
+Makefile
+CS488
+test_fs_support_case_sensitivity
+.DS_Store
+media
+external
