@@ -80,7 +80,7 @@ const float globalDistanceToFilm = globalFilmSize / (2.0f * tan(globalFOV * DegT
 bool globalEnableParticles = false;
 constexpr float deltaT = 0.002f;
 constexpr float3 globalGravity = float3(0.0f, -9.8f, 0.0f);
-constexpr int globalNumParticles = 1000;
+constexpr int globalNumParticles = 25;
 constexpr float G = 6.6743e-11f;
 
 
@@ -657,7 +657,7 @@ float barycentricInterpolateZ(const float3 points[], float3 p) {
 	return (a0 / a) * points[0].z + (a1 / a) * points[1].z + (a2 / a) * points[2].z;
 }
 
-float2 interpolateTex(const float3 points[], float3 p, const float2 texCoords[], const float wRecip[]) {
+HitInfo interpolateTex(const float3 points[], float3 p, const Triangle &tri, const float wRecip[]) {
 	float a = triangleArea(points);
 	float3 t0[3] = {p, points[1], points[2]};
 	float3 t1[3] = {p, points[0], points[2]};
@@ -666,10 +666,15 @@ float2 interpolateTex(const float3 points[], float3 p, const float2 texCoords[],
 	float a1 = triangleArea(t1);
 	float a2 = triangleArea(t2);
 	float interpolatedW = ((a0 / a) * wRecip[0] + (a1 / a) * wRecip[1] + (a2 / a) * wRecip[2]);
-	return {
-		((a0 / a) * texCoords[0][0] * wRecip[0] + (a1 / a) * texCoords[1][0] * wRecip[1] + (a2 / a) * texCoords[2][0] * wRecip[2]) / interpolatedW,
-		((a0 / a) * texCoords[0][1] * wRecip[0] + (a1 / a) * texCoords[1][1] * wRecip[1] + (a2 / a) * texCoords[2][1] * wRecip[2]) / interpolatedW
-	};
+
+	HitInfo hi;
+	float alpha = (a0 / a) * wRecip[0];
+	float beta = (a1 / a) * wRecip[1];
+	float gamma = (a2 / a) * wRecip[2];
+	hi.T = (alpha * tri.texcoords[0] + beta * tri.texcoords[1] + alpha * tri.texcoords[2]) * (1.0f / interpolatedW);
+	hi.N = (alpha * tri.normals[0] + beta * tri.normals[1] + gamma * tri.normals[2]) * (1.0f / interpolatedW);
+	hi.P = (alpha * tri.positions[0] + beta * tri.positions[1] + gamma * tri.positions[2]) * (1.0f / interpolatedW);
+	return hi;
 }
 
 float det(float3 cola, float3 colb, float3 colc) {
@@ -747,9 +752,8 @@ public:
 					float ndcY = (y + 0.5f) * 2.0f / FrameBuffer.height - 1.0f;
 					float ndcZ = barycentricInterpolateZ(ndcPoints, {ndcX, ndcY, 0.0f});
 					if (ndcZ < FrameBuffer.depth(x, y)) {
-						HitInfo hi;
+						HitInfo hi = interpolateTex(ndcPoints, {ndcX, ndcY, ndcZ}, tri, W);
 						hi.material = &materials[tri.idMaterial];
-						hi.T = interpolateTex(ndcPoints, {ndcX, ndcY, ndcZ}, tri.texcoords, W);
 						FrameBuffer.pixel(x, y) = shade(hi, {0.0f, 0.0f, 0.0f});
 						FrameBuffer.depth(x, y) = ndcZ;
 					}
@@ -1972,13 +1976,13 @@ static float3 shade(const HitInfo& hit, const float3& viewDir, const int level) 
 			float3 l = globalScene.pointLightSources[i]->position - hit.P;
 
 			// A2 code
-			// HitInfo dh;
-			// Ray ray;
-			// ray.d = -1 * l;
-			// ray.o = globalScene.pointLightSources[i]->position;
-			// if (globalScene.intersect(dh, ray) && distance(dh.P, ray.o) + Epsilon * 0.5f < distance(hit.P, ray.o)) {
-			// 	continue;
-			// }
+			HitInfo dh;
+			Ray ray;
+			ray.d = -1 * l;
+			ray.o = globalScene.pointLightSources[i]->position;
+			if (globalScene.intersect(dh, ray) && distance(dh.P, ray.o) + Epsilon * 0.5f < distance(hit.P, ray.o)) {
+				continue;
+			}
 
 			// the inverse-squared falloff
 			const float falloff = length2(l);
@@ -1993,7 +1997,7 @@ static float3 shade(const HitInfo& hit, const float3& viewDir, const int level) 
 			if (hit.material->isTextured) {
 				brdf *= hit.material->fetchTexture(hit.T);
 			}
-			return brdf * PI; //debug output
+			// return brdf * PI; //debug output
 
 			L += irradiance * brdf;
 		}
