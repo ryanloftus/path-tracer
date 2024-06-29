@@ -81,6 +81,7 @@ bool globalEnableParticles = false;
 constexpr float deltaT = 0.002f;
 constexpr float3 globalGravity = float3(0.0f, -9.8f, 0.0f);
 constexpr int globalNumParticles = 1000;
+constexpr float G = 6.6743e-11f;
 
 
 // dynamic camera parameters
@@ -636,7 +637,7 @@ bool isInsideTriangle(float px, float py, const float3 tpoints[]) {
 	bool l1 = isPointInsideLine(px, py, tpoints[0], tpoints[1], tpoints[2]);
 	bool l2 = isPointInsideLine(px, py, tpoints[1], tpoints[2], tpoints[0]);
 	bool l3 = isPointInsideLine(px, py, tpoints[2], tpoints[0], tpoints[1]);
-	return (l1 && l2 && l3);
+	return (l1 && l2 && l3) || (!l1 && !l2 && !l3);
 }
 
 float triangleArea(const float3 points[]) {
@@ -1614,6 +1615,7 @@ public:
 	float3 position = float3(0.0f);
 	float3 velocity = float3(0.0f);
 	float3 prevPosition = position;
+	float mass = 4e8f;
 
 	void reset() {
 		position = float3(PCG32::rand(), PCG32::rand(), PCG32::rand()) - float(0.5f);
@@ -1622,13 +1624,15 @@ public:
 		position += velocity * deltaT;
 	}
 
-	void step() {
+	void step(float3 force) {
 		float3 temp = position;
 
 		// === fill in this part in A3 ===
 		// TASK 1
 		// update the particle position and velocity here
-		position = position + (position - prevPosition) + powf(deltaT, 2) * globalGravity;
+		// position = position + (position - prevPosition) + powf(deltaT, 2) * globalGravity;
+		// TASK 4
+		position = position + (position - prevPosition) + powf(deltaT, 2) * (globalGravity + force * (1.0f / mass));
 		prevPosition = temp;
 
 		// TASK 2
@@ -1648,7 +1652,7 @@ public:
 		// TASK 3
 		// perform collisions on a sphere of radius 1 centered at the origin
 		// since r = 1 and c = 0, the formula for projecting position onto the sphere becomes position / ||position||
-		position = normalize(position);
+		// position = normalize(position);
 	}
 };
 
@@ -1713,9 +1717,24 @@ public:
 
 	void step() {
 		// add some particle-particle interaction here
+		float3 accumulatedForce[globalNumParticles];
+		// test
+		particles[0].mass = 10000.0f;
+		for (int i = 0; i < globalNumParticles; ++i) {
+			float3 f = float3(0.0f);
+			for (int j = 0; j < globalNumParticles; ++j) {
+				if (i == j) continue;
+				float3 diff = particles[j].position - particles[i].position;
+				float dist = sqrtf(powf(diff[0], 2) + powf(diff[1], 2) + powf(diff[2], 2));
+				float3 forceij = G * particles[i].mass * particles[j].mass * diff * (1.0f / powf(dist + Epsilon, 3.0f));
+				f += forceij;
+			}
+			accumulatedForce[i] = f;
+		}
+
 		// spherical particles can be implemented here
 		for (int i = 0; i < globalNumParticles; i++) {
-			particles[i].step();
+			particles[i].step(accumulatedForce[i]);
 		}
 		updateMesh();
 	}

@@ -14,6 +14,8 @@ Task 2 uses particle collision for position based particle motion as described i
 
 Task 3 uses vector projection to project the position onto the sphere.
 
+Task 4 adds a forces parameter to the Particle::step() function that contains the inter-particle gravitational forces computed by the ParticleSystem.
+
 ### Extras
 
 
