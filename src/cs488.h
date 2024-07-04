@@ -78,9 +78,9 @@ const float globalDistanceToFilm = globalFilmSize / (2.0f * tan(globalFOV * DegT
 
 // particle system related
 bool globalEnableParticles = false;
-constexpr float deltaT = 0.002f;
+constexpr float deltaT = 0.005f;// 0.002f;
 constexpr float3 globalGravity = float3(0.0f, -9.8f, 0.0f);
-constexpr int globalNumParticles = 25;
+constexpr int globalNumParticles = 100;
 constexpr float G = 6.6743e-11f;
 
 
@@ -657,7 +657,7 @@ float barycentricInterpolateZ(const float3 points[], float3 p) {
 	return (a0 / a) * points[0].z + (a1 / a) * points[1].z + (a2 / a) * points[2].z;
 }
 
-HitInfo interpolateTex(const float3 points[], float3 p, const Triangle &tri, const float wRecip[]) {
+float3 barycentricCoordinates(const float3 points[], float3 p) {
 	float a = triangleArea(points);
 	float3 t0[3] = {p, points[1], points[2]};
 	float3 t1[3] = {p, points[0], points[2]};
@@ -665,21 +665,28 @@ HitInfo interpolateTex(const float3 points[], float3 p, const Triangle &tri, con
 	float a0 = triangleArea(t0);
 	float a1 = triangleArea(t1);
 	float a2 = triangleArea(t2);
-	float interpolatedW = ((a0 / a) * wRecip[0] + (a1 / a) * wRecip[1] + (a2 / a) * wRecip[2]);
-
-	HitInfo hi;
-	float alpha = (a0 / a) * wRecip[0];
-	float beta = (a1 / a) * wRecip[1];
-	float gamma = (a2 / a) * wRecip[2];
-	hi.T = (alpha * tri.texcoords[0] + beta * tri.texcoords[1] + alpha * tri.texcoords[2]) * (1.0f / interpolatedW);
-	hi.N = (alpha * tri.normals[0] + beta * tri.normals[1] + gamma * tri.normals[2]) * (1.0f / interpolatedW);
-	hi.P = (alpha * tri.positions[0] + beta * tri.positions[1] + gamma * tri.positions[2]) * (1.0f / interpolatedW);
-	return hi;
+	float alpha = (a0 / a);
+	float beta = (a1 / a);
+	float gamma = (a2 / a);
+	return {alpha, beta, gamma};
 }
 
 float det(float3 cola, float3 colb, float3 colc) {
 	return dot(cross(cola, colb), colc);
 }
+
+HitInfo interpolateHitInfo(const Triangle &tri, const float3 baryCoords, float W[]) {
+	float3 perspectiveCorrectBaryCoords = {baryCoords[0] * W[0], baryCoords[1] * W[1], baryCoords[2] * W[2]};
+	float interpolatedW = dot(perspectiveCorrectBaryCoords, float3(1.0f));
+	HitInfo hi;
+	hi.T = (perspectiveCorrectBaryCoords[0] * tri.texcoords[0] + 
+			perspectiveCorrectBaryCoords[1] * tri.texcoords[1] + 
+			perspectiveCorrectBaryCoords[2] * tri.texcoords[2]) / interpolatedW;
+	hi.N = normalize(baryCoords[0] * tri.normals[0] + baryCoords[1] * tri.normals[1] + baryCoords[2] * tri.normals[2]);
+	hi.P = (baryCoords[0] * tri.positions[0] + baryCoords[1] * tri.positions[1] + baryCoords[2] * tri.positions[2]);
+	return hi;
+}
+
 
 // triangle mesh
 static float3 shade(const HitInfo& hit, const float3& viewDir, const int level = 0);
@@ -752,9 +759,10 @@ public:
 					float ndcY = (y + 0.5f) * 2.0f / FrameBuffer.height - 1.0f;
 					float ndcZ = barycentricInterpolateZ(ndcPoints, {ndcX, ndcY, 0.0f});
 					if (ndcZ < FrameBuffer.depth(x, y)) {
-						HitInfo hi = interpolateTex(ndcPoints, {ndcX, ndcY, ndcZ}, tri, W);
+						float3 baryCoords = barycentricCoordinates(ndcPoints, {ndcX, ndcY, ndcZ});
+						HitInfo hi = interpolateHitInfo(tri, baryCoords, W);
 						hi.material = &materials[tri.idMaterial];
-						FrameBuffer.pixel(x, y) = shade(hi, {0.0f, 0.0f, 0.0f});
+						FrameBuffer.pixel(x, y) = shade(hi, globalViewDir);
 						FrameBuffer.depth(x, y) = ndcZ;
 					}
 				}
@@ -1619,7 +1627,7 @@ public:
 	float3 position = float3(0.0f);
 	float3 velocity = float3(0.0f);
 	float3 prevPosition = position;
-	float mass = 4e8f;
+	float mass = 4.0f;
 
 	void reset() {
 		position = float3(PCG32::rand(), PCG32::rand(), PCG32::rand()) - float(0.5f);
@@ -1634,9 +1642,9 @@ public:
 		// === fill in this part in A3 ===
 		// TASK 1
 		// update the particle position and velocity here
-		// position = position + (position - prevPosition) + powf(deltaT, 2) * globalGravity;
+		position = position + (position - prevPosition) + powf(deltaT, 2) * globalGravity;
 		// TASK 4
-		position = position + (position - prevPosition) + powf(deltaT, 2) * (globalGravity + force * (1.0f / mass));
+		// position = position + (position - prevPosition) + powf(deltaT, 2) * (globalGravity + force * (1.0f / mass));
 		prevPosition = temp;
 
 		// TASK 2
@@ -1656,7 +1664,7 @@ public:
 		// TASK 3
 		// perform collisions on a sphere of radius 1 centered at the origin
 		// since r = 1 and c = 0, the formula for projecting position onto the sphere becomes position / ||position||
-		// position = normalize(position);
+		position = normalize(position);
 	}
 };
 
@@ -1722,15 +1730,13 @@ public:
 	void step() {
 		// add some particle-particle interaction here
 		float3 accumulatedForce[globalNumParticles];
-		// test
-		particles[0].mass = 10000.0f;
 		for (int i = 0; i < globalNumParticles; ++i) {
 			float3 f = float3(0.0f);
 			for (int j = 0; j < globalNumParticles; ++j) {
 				if (i == j) continue;
 				float3 diff = particles[j].position - particles[i].position;
 				float dist = sqrtf(powf(diff[0], 2) + powf(diff[1], 2) + powf(diff[2], 2));
-				float3 forceij = G * particles[i].mass * particles[j].mass * diff * (1.0f / powf(dist + Epsilon, 3.0f));
+				float3 forceij = G * particles[i].mass * particles[j].mass * diff / powf(dist + Epsilon, 3.0f);
 				f += forceij;
 			}
 			accumulatedForce[i] = f;
@@ -1740,6 +1746,33 @@ public:
 		for (int i = 0; i < globalNumParticles; i++) {
 			particles[i].step(accumulatedForce[i]);
 		}
+
+		// collision detection
+		for (int level = 0; level < 20; level++) {
+			for (int i = 0; i < globalNumParticles; i++) {
+				for (int j = i + 1; j < globalNumParticles; j++) {
+					Particle &p1 = particles[i];
+					Particle &p2 = particles[j];
+					float dist = distance(p1.position, p2.position);
+					float dp = 2 * sphereSize - dist;
+					if (0 <= dp && dp > Epsilon) {
+						float3 delta = dp * 0.5f * normalize(p1.position - p2.position);
+						float3 u1 = p1.position - p1.prevPosition;
+						float3 u2 = p2.position - p2.prevPosition;
+						float3 k = normalize(p1.position - p2.position);
+						// a, v1, v2 calculations here assume equal mass
+						float3 a = k * (u1 - u2);
+						float3 v1 = u1 - a * k;
+						float3 v2 = u2 + a * k;
+						p1.position += delta;
+						p1.prevPosition = p1.position - v1;
+						p2.position -= delta;
+						p2.prevPosition = p2.position - v2;
+					}
+				}
+			}
+		}
+
 		updateMesh();
 	}
 };
