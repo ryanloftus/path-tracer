@@ -617,10 +617,10 @@ struct Triangle {
 	float3 center;
 };
 
-bool isPointInsideLine(float px, float py, float3 p1, float3 p2, float3 p3) {
-	float3 tangent = p2 - p1;
+bool isPointInsideLine(float2 p, float2 p1, float2 p2, float2 p3) {
+	float2 tangent = p2 - p1;
 	float2 normal = {0-tangent.y, tangent.x};
-	float2 v = {px - p1.x, py - p1.y};
+	float2 v = {p.x - p1.x, p.y - p1.y};
 	float insideLine = v.x * normal.x + v.y * normal.y;
 	if (insideLine > 0) {
 		return true;
@@ -632,11 +632,11 @@ bool isPointInsideLine(float px, float py, float3 p1, float3 p2, float3 p3) {
 	}
 }
 
-// return true if (px, py) contained within the triangle formed by tpoints, false otherwise
-bool isInsideTriangle(float px, float py, const float3 tpoints[]) {
-	bool l1 = isPointInsideLine(px, py, tpoints[0], tpoints[1], tpoints[2]);
-	bool l2 = isPointInsideLine(px, py, tpoints[1], tpoints[2], tpoints[0]);
-	bool l3 = isPointInsideLine(px, py, tpoints[2], tpoints[0], tpoints[1]);
+// return true if p contained within the triangle formed by tpoints, false otherwise
+bool isInsideTriangle(float2 p, const float2 tpoints[]) {
+	bool l1 = isPointInsideLine(p, tpoints[0], tpoints[1], tpoints[2]);
+	bool l2 = isPointInsideLine(p, tpoints[1], tpoints[2], tpoints[0]);
+	bool l3 = isPointInsideLine(p, tpoints[2], tpoints[0], tpoints[1]);
 	return (l1 && l2 && l3) || (!l1 && !l2 && !l3);
 }
 
@@ -645,30 +645,16 @@ float triangleArea(const float3 points[]) {
 		abs(points[0].x * (points[1].y - points[2].y) + points[1].x * (points[2].y - points[0].y) + points[2].x * (points[0].y - points[1].y));
 }
 
-// uses px, py to Barycentric interpolate pz using points
-float barycentricInterpolateZ(const float3 points[], float3 p) {
+float3 barycentricCoordinates(const float3 points[], float x, float y) {
 	float a = triangleArea(points);
+	float3 p = {x, y, 0.0f};
 	float3 t0[3] = {p, points[1], points[2]};
 	float3 t1[3] = {p, points[0], points[2]};
 	float3 t2[3] = {p, points[0], points[1]};
 	float a0 = triangleArea(t0);
 	float a1 = triangleArea(t1);
 	float a2 = triangleArea(t2);
-	return (a0 / a) * points[0].z + (a1 / a) * points[1].z + (a2 / a) * points[2].z;
-}
-
-float3 barycentricCoordinates(const float3 points[], float3 p) {
-	float a = triangleArea(points);
-	float3 t0[3] = {p, points[1], points[2]};
-	float3 t1[3] = {p, points[0], points[2]};
-	float3 t2[3] = {p, points[0], points[1]};
-	float a0 = triangleArea(t0);
-	float a1 = triangleArea(t1);
-	float a2 = triangleArea(t2);
-	float alpha = (a0 / a);
-	float beta = (a1 / a);
-	float gamma = (a2 / a);
-	return {alpha, beta, gamma};
+	return {(a0 / a), (a1 / a), (a2 / a)};
 }
 
 float det(float3 cola, float3 colb, float3 colc) {
@@ -748,18 +734,20 @@ public:
 		}
 
 		// iterate over all pixels (x,y), check if (x,y) is inside the triangle, shade it
-		int smallestScreenX = (int)fmax(0.0f, fmin(fmin(screenPoints[0].x, screenPoints[1].x), screenPoints[2].x) - 1);
-		int smallestScreenY = (int)fmax(0.0f, fmin(fmin(screenPoints[0].y, screenPoints[1].y), screenPoints[2].y) - 1);
+		int smallestScreenX = (int)fmax(0.0f, fmin(fmin(screenPoints[0].x, screenPoints[1].x), screenPoints[2].x) - 2);
+		int smallestScreenY = (int)fmax(0.0f, fmin(fmin(screenPoints[0].y, screenPoints[1].y), screenPoints[2].y) - 2);
 		int largestScreenX = (int)fmin(FrameBuffer.width, fmax(fmax(screenPoints[0].x, screenPoints[1].x), screenPoints[2].x) + 2);
 		int largestScreenY = (int)fmin(FrameBuffer.height, fmax(fmax(screenPoints[0].y, screenPoints[1].y), screenPoints[2].y) + 2);
+		float2 screenPoints2d[3];
+		for (int i = 0; i < 3; ++i) screenPoints2d[i] = {screenPoints[i].x, screenPoints[i].y};
 		for (int x = smallestScreenX; x < largestScreenX; x++) {
 			for (int y = smallestScreenY; y < largestScreenY; y++) {
-				if (isInsideTriangle(x + 0.5f, y + 0.5f, screenPoints)) {
+				if (isInsideTriangle({x + 0.5f, y + 0.5f}, screenPoints2d)) {
 					float ndcX = (x + 0.5f) * 2.0f / FrameBuffer.width - 1.0f;
 					float ndcY = (y + 0.5f) * 2.0f / FrameBuffer.height - 1.0f;
-					float ndcZ = barycentricInterpolateZ(ndcPoints, {ndcX, ndcY, 0.0f});
+					float3 baryCoords = barycentricCoordinates(ndcPoints, ndcX, ndcY);
+					float ndcZ = dot(baryCoords, {ndcPoints[0].z, ndcPoints[1].z, ndcPoints[2].z});
 					if (ndcZ < FrameBuffer.depth(x, y)) {
-						float3 baryCoords = barycentricCoordinates(ndcPoints, {ndcX, ndcY, ndcZ});
 						HitInfo hi = interpolateHitInfo(tri, baryCoords, W);
 						hi.material = &materials[tri.idMaterial];
 						FrameBuffer.pixel(x, y) = shade(hi, globalViewDir);
