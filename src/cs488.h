@@ -622,9 +622,9 @@ bool isPointInsideLine(float2 p, float2 p1, float2 p2, float2 p3) {
 	float2 normal = {0-tangent.y, tangent.x};
 	float2 v = {p.x - p1.x, p.y - p1.y};
 	float insideLine = v.x * normal.x + v.y * normal.y;
-	if (insideLine > 0) {
+	if (insideLine - Epsilon > 0) {
 		return true;
-	} else if (insideLine == 0) {
+	} else if (abs(insideLine) < Epsilon) {
 		// return true if top edge or left edge
 		return (tangent.y == 0 && p3.y < p1.y) || (tangent.y != 0 && normal.x < 0);
 	} else {
@@ -650,10 +650,9 @@ float3 barycentricCoordinates(const float3 points[], float x, float y) {
 	float3 p = {x, y, 0.0f};
 	float3 t0[3] = {p, points[1], points[2]};
 	float3 t1[3] = {p, points[0], points[2]};
-	float3 t2[3] = {p, points[0], points[1]};
 	float a0 = triangleArea(t0);
 	float a1 = triangleArea(t1);
-	float a2 = triangleArea(t2);
+	float a2 = a - a0 - a1;
 	return {(a0 / a), (a1 / a), (a2 / a)};
 }
 
@@ -662,17 +661,16 @@ float det(float3 cola, float3 colb, float3 colc) {
 }
 
 HitInfo interpolateHitInfo(const Triangle &tri, const float3 baryCoords, float W[]) {
-	float3 perspectiveCorrectBaryCoords = {baryCoords[0] * W[0], baryCoords[1] * W[1], baryCoords[2] * W[2]};
-	float interpolatedW = dot(perspectiveCorrectBaryCoords, float3(1.0f));
+	float3 pcBaryCoords = {baryCoords[0] * W[0], baryCoords[1] * W[1], baryCoords[2] * W[2]};
+	float interpolatedW = sum(pcBaryCoords);
 	HitInfo hi;
-	hi.T = (perspectiveCorrectBaryCoords[0] * tri.texcoords[0] + 
-			perspectiveCorrectBaryCoords[1] * tri.texcoords[1] + 
-			perspectiveCorrectBaryCoords[2] * tri.texcoords[2]) / interpolatedW;
-	hi.N = normalize(baryCoords[0] * tri.normals[0] + baryCoords[1] * tri.normals[1] + baryCoords[2] * tri.normals[2]);
-	hi.P = (baryCoords[0] * tri.positions[0] + baryCoords[1] * tri.positions[1] + baryCoords[2] * tri.positions[2]);
+	hi.T = (pcBaryCoords[0] * tri.texcoords[0] + 
+			pcBaryCoords[1] * tri.texcoords[1] + 
+			pcBaryCoords[2] * tri.texcoords[2]) / interpolatedW;
+	hi.N = normalize((pcBaryCoords[0] * tri.normals[0] + pcBaryCoords[1] * tri.normals[1] + pcBaryCoords[2] * tri.normals[2]) / interpolatedW);
+	hi.P = (pcBaryCoords[0] * tri.positions[0] + pcBaryCoords[1] * tri.positions[1] + pcBaryCoords[2] * tri.positions[2]) / interpolatedW;
 	return hi;
 }
-
 
 // triangle mesh
 static float3 shade(const HitInfo& hit, const float3& viewDir, const int level = 0);
@@ -1744,11 +1742,11 @@ public:
 					float dist = distance(p1.position, p2.position);
 					float dp = 2 * sphereSize - dist;
 					if (0 <= dp && dp > Epsilon) {
+						// calculations here assume equal mass
 						float3 delta = dp * 0.5f * normalize(p1.position - p2.position);
 						float3 u1 = p1.position - p1.prevPosition;
 						float3 u2 = p2.position - p2.prevPosition;
 						float3 k = normalize(p1.position - p2.position);
-						// a, v1, v2 calculations here assume equal mass
 						float3 a = k * (u1 - u2);
 						float3 v1 = u1 - a * k;
 						float3 v2 = u2 + a * k;
