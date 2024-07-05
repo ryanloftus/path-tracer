@@ -78,10 +78,12 @@ const float globalDistanceToFilm = globalFilmSize / (2.0f * tan(globalFOV * DegT
 
 // particle system related
 bool globalEnableParticles = false;
-constexpr float deltaT = 0.005f;// 0.002f;
+constexpr float deltaT = 0.002f;
 constexpr float3 globalGravity = float3(0.0f, -9.8f, 0.0f);
-constexpr int globalNumParticles = 100;
+constexpr int globalNumParticles = 500;
 constexpr float G = 6.6743e-11f;
+constexpr float globalTheta = 100.0f;
+#define A3_BONUS_1 // Comment this out to turn off Extra 1 for assignment 3
 
 
 // dynamic camera parameters
@@ -1613,7 +1615,7 @@ public:
 	float3 position = float3(0.0f);
 	float3 velocity = float3(0.0f);
 	float3 prevPosition = position;
-	float mass = 4.0f;
+	float mass = 4.0e9f;
 
 	void reset() {
 		position = float3(PCG32::rand(), PCG32::rand(), PCG32::rand()) - float(0.5f);
@@ -1628,9 +1630,9 @@ public:
 		// === fill in this part in A3 ===
 		// TASK 1
 		// update the particle position and velocity here
-		position = position + (position - prevPosition) + powf(deltaT, 2) * globalGravity;
+		// position = position + (position - prevPosition) + powf(deltaT, 2) * globalGravity;
 		// TASK 4
-		// position = position + (position - prevPosition) + powf(deltaT, 2) * (globalGravity + force * (1.0f / mass));
+		position = position + (position - prevPosition) + powf(deltaT, 2) * (globalGravity + force * (1.0f / mass));
 		prevPosition = temp;
 
 		// TASK 2
@@ -1650,8 +1652,17 @@ public:
 		// TASK 3
 		// perform collisions on a sphere of radius 1 centered at the origin
 		// since r = 1 and c = 0, the formula for projecting position onto the sphere becomes position / ||position||
-		position = normalize(position);
+		// position = normalize(position);
 	}
+};
+
+struct OctreeNode {
+    float3 center;        // Center of this node
+    float size;           // Size of this node
+    float3 massCenter;    // Center of mass of particles in this node
+    float mass;           // Total mass of particles in this node
+    std::vector<int> particles;
+    std::vector<OctreeNode*> children;
 };
 
 
@@ -1713,9 +1724,96 @@ public:
 		updateMesh();
 	}
 
-	void step() {
-		// add some particle-particle interaction here
-		float3 accumulatedForce[globalNumParticles];
+	void computeMassDistribution(OctreeNode* node) {
+		if (node->particles.size() == 1) {
+			node->mass = particles[node->particles[0]].mass;
+			node->massCenter = particles[node->particles[0]].position;
+		} else {
+			node->mass = 0.0f;
+			node->massCenter = float3{0.0f, 0.0f, 0.0f};
+			for (auto& child : node->children) {
+				computeMassDistribution(child);
+				node->mass += child->mass;
+				node->massCenter = node->massCenter + child->massCenter * child->mass;
+			}
+			node->massCenter = node->massCenter / node->mass;
+		}
+	}
+
+	void computeForce(int pId, OctreeNode* node, float3& accumulatedForce) {
+		if (node->particles.size() == 1 && node->particles[0] == pId) return;
+		Particle &p = particles[pId];
+		float3 diff = node->massCenter - p.position;
+		float dist = length(diff);
+		if (node->size / dist < globalTheta || node->particles.size() == 1) {
+			float3 force = G * p.mass * node->mass * diff / std::pow(dist + Epsilon, 3.0f);
+			accumulatedForce = accumulatedForce + force;
+		} else {
+			for (auto& child : node->children) {
+				computeForce(pId, child, accumulatedForce);
+			}
+		}
+	}
+
+	void insertParticle(OctreeNode* node, int pId) {
+		// if empty leaf node, insert particle here
+		if (node->particles.size() == 0 && node->children.empty()) {
+			node->particles.push_back(pId);
+			return;
+		}
+
+		// if non-empty leaf node, split into 8 new leaves
+		if (node->particles.size() == 1 && node->children.empty()) {
+			int existingParticle = node->particles[0];
+			node->particles.clear();
+			float halfSize = node->size / 2.0f;
+			for (int i = 0; i < 8; ++i) {
+				node->children.push_back(new OctreeNode());
+				node->children[i]->center = node->center + float3{
+					(i & 1 ? halfSize : -halfSize),
+					(i & 2 ? halfSize : -halfSize),
+					(i & 4 ? halfSize : -halfSize)};
+				node->children[i]->size = halfSize;
+			}
+			insertParticle(node, existingParticle);
+		}
+
+		// Insert the particle into the correct child
+		for (auto& child : node->children) {
+			float px = particles[pId].position.x;
+			float py = particles[pId].position.y;
+			float pz = particles[pId].position.z;
+			if (px >= child->center.x - child->size && px < child->center.x + child->size &&
+				py >= child->center.y - child->size && py < child->center.y + child->size &&
+				pz >= child->center.z - child->size && pz < child->center.z + child->size) {
+				insertParticle(child, pId);
+				return;
+			}
+		}
+	}
+
+	void computeAccumulatedForces(float3 accumulatedForces[]) {
+		std::clock_t start = std::clock();
+	#ifdef A3_BONUS_1
+		// build octree
+		OctreeNode root;
+		AABB box = AABB();
+		for (auto &particle : particles) box.fit(particle.position);
+		root.center = box.get_minp() + (box.get_maxp() - box.get_minp()) / 2;
+		root.size = fmax(box.get_size().x, fmax(box.get_size().y, box.get_size().z));
+		for (int i = 0; i < globalNumParticles; ++i) {
+			insertParticle(&root, i);
+		}
+
+		// compute total masses and centre of masses for the octree
+		computeMassDistribution(&root);
+
+		// use octree to find total gravitational force acting on each particle
+		for (int i = 0; i < globalNumParticles; ++i) {
+			accumulatedForces[i] = float3(0.0f);
+			computeForce(i, &root, accumulatedForces[i]);
+		}
+	#else
 		for (int i = 0; i < globalNumParticles; ++i) {
 			float3 f = float3(0.0f);
 			for (int j = 0; j < globalNumParticles; ++j) {
@@ -1725,10 +1823,19 @@ public:
 				float3 forceij = G * particles[i].mass * particles[j].mass * diff / powf(dist + Epsilon, 3.0f);
 				f += forceij;
 			}
-			accumulatedForce[i] = f;
+			accumulatedForces[i] = f;
 		}
+	#endif
+		double duration = (std::clock() - start) / (double) CLOCKS_PER_SEC;
+		std::cout << duration << std::endl;
+	}
 
-		// spherical particles can be implemented here
+	void step() {
+		// compute gravitational forces between particles
+		float3 accumulatedForce[globalNumParticles];
+		computeAccumulatedForces(accumulatedForce);
+
+		// update particle positions
 		for (int i = 0; i < globalNumParticles; i++) {
 			particles[i].step(accumulatedForce[i]);
 		}

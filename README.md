@@ -21,4 +21,11 @@ Task 5 solves multiple collisions at the same time by iterating over each pair o
 
 ### Extras
 
+For Extra 1, I implemented Barnes-Hut to speed up particle-particle gravity computations. Extra 1 can be enabled by uncommenting the line `#define A3_BONUS_1`.
 
+The performance improvement for running with 5000 single-triangle particles on my laptop was:
+
+-- seconds with enhancement.
+-- without enhancement.
+
+The time was measured from the start of `computeAccumulatedForces()` to the end of `computeAccumulatedForces()` for one frame.
