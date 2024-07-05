@@ -80,10 +80,10 @@ const float globalDistanceToFilm = globalFilmSize / (2.0f * tan(globalFOV * DegT
 bool globalEnableParticles = false;
 constexpr float deltaT = 0.002f;
 constexpr float3 globalGravity = float3(0.0f, -9.8f, 0.0f);
-constexpr int globalNumParticles = 500;
+constexpr int globalNumParticles = 100;
 constexpr float G = 6.6743e-11f;
 constexpr float globalTheta = 100.0f;
-#define A3_BONUS_1 // Comment this out to turn off Extra 1 for assignment 3
+// #define A3_BONUS_1 // Comment this out to turn off Extra 1 for assignment 3
 
 
 // dynamic camera parameters
@@ -1652,7 +1652,7 @@ public:
 		// TASK 3
 		// perform collisions on a sphere of radius 1 centered at the origin
 		// since r = 1 and c = 0, the formula for projecting position onto the sphere becomes position / ||position||
-		// position = normalize(position);
+		position = normalize(position);
 	}
 };
 
@@ -1660,7 +1660,7 @@ struct OctreeNode {
     float3 center;        // Center of this node
     float size;           // Size of this node
     float3 massCenter;    // Center of mass of particles in this node
-    float mass;           // Total mass of particles in this node
+    int mass;             // Total mass of particles in this node (given as the number of particles since mass is same for all particles)
     std::vector<int> particles;
     std::vector<OctreeNode*> children;
 };
@@ -1726,17 +1726,21 @@ public:
 
 	void computeMassDistribution(OctreeNode* node) {
 		if (node->particles.size() == 1) {
-			node->mass = particles[node->particles[0]].mass;
+			node->mass = 1;
 			node->massCenter = particles[node->particles[0]].position;
-		} else {
-			node->mass = 0.0f;
+		} else if (node->children.size() > 0) {
+			node->mass = 0;
 			node->massCenter = float3{0.0f, 0.0f, 0.0f};
-			for (auto& child : node->children) {
+			for (auto child : node->children) {
 				computeMassDistribution(child);
-				node->mass += child->mass;
-				node->massCenter = node->massCenter + child->massCenter * child->mass;
+				if (child->mass > 0) {
+					node->mass += child->mass;
+					node->massCenter += child->massCenter * child->mass;
+				}
 			}
 			node->massCenter = node->massCenter / node->mass;
+		} else {
+			node->mass = 0;
 		}
 	}
 
@@ -1746,8 +1750,7 @@ public:
 		float3 diff = node->massCenter - p.position;
 		float dist = length(diff);
 		if (node->size / dist < globalTheta || node->particles.size() == 1) {
-			float3 force = G * p.mass * node->mass * diff / std::pow(dist + Epsilon, 3.0f);
-			accumulatedForce = accumulatedForce + force;
+			accumulatedForce += G * p.mass * p.mass * node->mass * diff / powf(dist + Epsilon, 3.0f);
 		} else {
 			for (auto& child : node->children) {
 				computeForce(pId, child, accumulatedForce);
@@ -1793,7 +1796,6 @@ public:
 	}
 
 	void computeAccumulatedForces(float3 accumulatedForces[]) {
-		std::clock_t start = std::clock();
 	#ifdef A3_BONUS_1
 		// build octree
 		OctreeNode root;
@@ -1826,8 +1828,6 @@ public:
 			accumulatedForces[i] = f;
 		}
 	#endif
-		double duration = (std::clock() - start) / (double) CLOCKS_PER_SEC;
-		std::cout << duration << std::endl;
 	}
 
 	void step() {

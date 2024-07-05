@@ -25,7 +25,7 @@ For Extra 1, I implemented Barnes-Hut to speed up particle-particle gravity comp
 
 The performance improvement for running with 5000 single-triangle particles on my laptop was:
 
--- seconds with enhancement.
--- without enhancement.
+0.018 seconds with enhancement.
+2.917 without enhancement.
 
-The time was measured from the start of `computeAccumulatedForces()` to the end of `computeAccumulatedForces()` for one frame.
+The time was measured by from the start of `computeAccumulatedForces()` to the end of `computeAccumulatedForces()` for one frame. Measurements given take the average over the first 10 frames.
