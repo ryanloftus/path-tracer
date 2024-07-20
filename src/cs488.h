@@ -34,6 +34,7 @@ using namespace linalg::aliases;
 #include <vector>
 #include <cfloat>
 #include <ctime>
+#include <thread>
 
 
 // main window
@@ -101,11 +102,16 @@ static double m_mouseX = 0.0;
 static double m_mouseY = 0.0;
 
 
+// path tracing
+static int numThreads = std::thread::hardware_concurrency();
+
+
 // rendering algorithm
 enum enumRenderType {
 	RENDER_RASTERIZE,
 	RENDER_RAYTRACE,
 	RENDER_IMAGE,
+	RENDER_PATHTRACE,
 };
 enumRenderType globalRenderType = RENDER_IMAGE;
 int globalFrameCount = 0;
@@ -2028,8 +2034,68 @@ public:
 		}
 	}
 
+	Ray generateRay(int x, int y) const {
+		// compute the camera coordinate system 
+		const float3 wDir = normalize(float3(-globalViewDir));
+		const float3 uDir = normalize(cross(globalUp, wDir));
+		const float3 vDir = cross(wDir, uDir);
+
+		// compute the pixel location in the world coordinate system using the camera coordinate system
+		// trace a ray through the center of each pixel with a random offset
+		const float imPlaneUPos = (x + (PCG32::rand() * 2 - 1)) / float(globalWidth) - 0.5f;
+		const float imPlaneVPos = (y + (PCG32::rand() * 2 - 1)) / float(globalHeight) - 0.5f;
+
+		const float3 pixelPos = globalEye + float(globalAspectRatio * globalFilmSize * imPlaneUPos) * uDir + float(globalFilmSize * imPlaneVPos) * vDir - globalDistanceToFilm * wDir;
+
+		return Ray(globalEye, normalize(pixelPos - globalEye));
+	}
+
+	void pathtraceSegment(int xmin, int xmax) {
+		// loop over all pixels in the image
+		for (int j = 0; j < globalHeight; ++j) {
+			for (int i = xmin; i <= xmax; ++i) {
+				// TODO: more efficient sampling method (Monte Carlo)
+				int SAMPLES = 10;
+				float3 pixelValue = float3(0.0f);
+				for (int k = 0; k < SAMPLES; ++k) {
+					const Ray ray = generateRay(i, j);
+					HitInfo hitInfo;
+					if (intersect(hitInfo, ray)) {
+						pixelValue += shade(hitInfo, -ray.d);
+					} else {
+						pixelValue += this->ibl(ray);
+					}
+				}
+				FrameBuffer.pixel(i, j) = pixelValue / SAMPLES;
+			}
+		}
+	}
+
+	void Pathtrace() {
+		FrameBuffer.clear();
+
+		// spawn threads
+		std::vector<std::thread> threads;
+		for (int i = 0; i < numThreads; ++i) {
+			threads.push_back(std::thread([this, i]() {
+				this->pathtraceSegment(i * globalWidth / numThreads, (i + 1) * globalWidth / numThreads - 1);
+			}));
+		}
+
+		// join threads
+		for (auto& thread : threads) {
+			thread.join();
+		}
+	}
+
 };
 static Scene globalScene;
+
+static float fresnel(float eta1, float eta2, float cosThetaI, float cosThetaO) {
+	float rhoS = (eta1 * cosThetaI - eta2 * cosThetaO) / (eta1 * cosThetaI + eta2 * cosThetaO);
+	float rhoT = (eta1 * cosThetaO - eta2 * cosThetaI) / (eta1 * cosThetaO + eta2 * cosThetaI);
+	return (powf(rhoS, 2) + powf(rhoT, 2)) / 2;
+}
 
 static float3 reflectRay(const float3& viewDir, const HitInfo& hit, const int level) {
 	// steps:
@@ -2072,28 +2138,31 @@ static float3 refractRay(const float3& viewDir, const HitInfo& hit, const int le
 		n = -n;
 	}
 	float underRoot = 1 - powf(eta1 / eta2, 2) * (1 - powf(wn, 2));
+
+	// Check for total internal reflection
 	if (underRoot < 0) {
-		// Total internal reflection
 		return reflectRay(viewDir, hit, level);
 	}
+
+	// Refracted ray
 	refractedRay.d = (eta1 / eta2) * (wi - wn * n) - (sqrtf(underRoot) * n);
 	refractedRay.o = hit.P - Epsilon * n;
 	HitInfo nextHit;
 	bool isHit = globalScene.intersect(nextHit, refractedRay);
-	if (isHit) {
-		return shade(nextHit, -refractedRay.d, level+1);
-	} else {
-		return globalScene.ibl(refractedRay);
-	}
+	float3 refractedRayValue = (isHit ? shade(nextHit, -refractedRay.d, level+1) : globalScene.ibl(refractedRay));
+	
+	// Fresnel
+	float cosThetaI = wn / (length(wi) * length(n));
+	float cosThetaO = dot(n, refractedRay.d) / (length(n) * length(refractedRay.d));
+	float R = fresnel(eta1, eta2, cosThetaI, cosThetaO);
+
+	return R * reflectRay(viewDir, hit, level) + (1 - R) * refractedRayValue;
 }
 
-// ====== implement it in A2 ======
-// fill in the missing parts
 static float3 shade(const HitInfo& hit, const float3& viewDir, const int level) {
 	if (level > maxLevel) {
 		return float3(0.0f);
 	} else if (hit.material->type == MAT_LAMBERTIAN) {
-		// you may want to add shadow ray tracing here in A2
 		float3 L = float3(0.0f);
 		float3 brdf, irradiance;
 
@@ -2101,7 +2170,6 @@ static float3 shade(const HitInfo& hit, const float3& viewDir, const int level) 
 		for (int i = 0; i < globalScene.pointLightSources.size(); i++) {
 			float3 l = globalScene.pointLightSources[i]->position - hit.P;
 
-			// A2 code
 			HitInfo dh;
 			Ray ray;
 			ray.d = -1 * l;
@@ -2261,6 +2329,8 @@ public:
 				globalScene.Raytrace();
 			} else if (globalRenderType == RENDER_IMAGE) {
 				if (process) process();
+			} else if (globalRenderType == RENDER_PATHTRACE) {
+				globalScene.Pathtrace();
 			}
 			// double duration = (std::clock() - start) / (double) CLOCKS_PER_SEC;
 			// std::cout << duration << std::endl;

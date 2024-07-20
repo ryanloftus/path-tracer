@@ -75,12 +75,19 @@ static void A3(int argc, const char* argv[]) {
 }
 // ======== you probably don't need to modify above in A1 to A3 ========
 
+static void Project(int argc, const char* argv[]) {
+    setupScene(argc, argv);
+    setupLightSource(); // TODO: read area lights from file or lights in general?
+    globalRenderType = RENDER_PATHTRACE;
+}
+
 
 int main(int argc, const char* argv[]) {
     // A0(argc, argv);
     // A1(argc, argv);
     // A2(argc, argv);
-    A3(argc, argv);
+    // A3(argc, argv);
+    Project(argc, argv);
 
     CS488.start();
 }
