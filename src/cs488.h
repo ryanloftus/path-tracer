@@ -675,7 +675,7 @@ HitInfo interpolateHitInfo(const Triangle &tri, const float3 baryCoords, float W
 	hi.T = (pcBaryCoords[0] * tri.texcoords[0] + 
 			pcBaryCoords[1] * tri.texcoords[1] + 
 			pcBaryCoords[2] * tri.texcoords[2]) / interpolatedW;
-	hi.N = normalize((pcBaryCoords[0] * tri.normals[0] + pcBaryCoords[1] * tri.normals[1] + pcBaryCoords[2] * tri.normals[2]) / interpolatedW);
+	hi.N = normalize(pcBaryCoords[0] * tri.normals[0] + pcBaryCoords[1] * tri.normals[1] + pcBaryCoords[2] * tri.normals[2]);
 	hi.P = (pcBaryCoords[0] * tri.positions[0] + pcBaryCoords[1] * tri.positions[1] + pcBaryCoords[2] * tri.positions[2]) / interpolatedW;
 	return hi;
 }
@@ -704,13 +704,6 @@ public:
 	}
 
 	void rasterizeTriangle(const Triangle& tri, const float4x4& plm) const {
-		// ====== implement it in A1 ======
-		// rasterization of a triangle
-		// "plm" should be a matrix that contains perspective projection and the camera matrix
-		// you do not need to implement clipping
-		// you may call the "shade" function to get the pixel value
-		// (you may ignore viewDir for now)
-
 		float3 screenPoints[3];
 		float3 ndcPoints[3];
 		float W[3];
@@ -730,13 +723,6 @@ public:
 				ndcPoints[k].z
 			};
 			W[k] = 1.0f / p.w;
-
-			// TASK 2: get integer points and color them white
-			// int i = static_cast<int>(screenPoints[k].x);
-			// int j = static_cast<int>(screenPoints[k].y);
-			// if (FrameBuffer.valid(i, j)) {
-			// 	FrameBuffer.pixel(i, j) = float3(1.0f);
-			// }
 		}
 
 		// iterate over all pixels (x,y), check if (x,y) is inside the triangle, shade it
@@ -1300,9 +1286,6 @@ private:
 	}
 };
 
-
-
-// BVH node (for A2 extra)
 class BVHNode {
 public:
 	bool isLeaf;
@@ -1312,9 +1295,6 @@ public:
 	AABB bbox;
 };
 
-
-// ====== implement it in A2 extra ======
-// fill in the missing parts
 class BVH {
 public:
 	const TriangleMesh* triangleMesh = nullptr;
@@ -1605,15 +1585,6 @@ bool BVH::traverse(HitInfo& minHit, const Ray& ray, int node_id, float tMin, flo
 	return hit;
 }
 
-
-
-
-
-
-
-
-
-
 // ====== implement it in A3 ======
 // fill in the missing parts
 class Particle {
@@ -1670,7 +1641,6 @@ struct OctreeNode {
     std::vector<int> particles;
     std::vector<OctreeNode*> children;
 };
-
 
 class ParticleSystem {
 public:
@@ -1876,13 +1846,6 @@ public:
 	}
 };
 static ParticleSystem globalParticleSystem;
-
-
-
-
-
-
-
 
 // scene definition
 class Scene {
@@ -2166,6 +2129,10 @@ static float3 shade(const HitInfo& hit, const float3& viewDir, const int level) 
 		float3 L = float3(0.0f);
 		float3 brdf, irradiance;
 
+		float wn = dot(-viewDir, hit.N);
+		bool isBackFace = (wn > 0);
+		float3 n = (isBackFace ? -hit.N : hit.N);
+
 		// loop over all of the point light sources
 		for (int i = 0; i < globalScene.pointLightSources.size(); i++) {
 			float3 l = globalScene.pointLightSources[i]->position - hit.P;
@@ -2185,8 +2152,8 @@ static float3 shade(const HitInfo& hit, const float3& viewDir, const int level) 
 			l /= sqrtf(falloff);
 
 			// get the irradiance
-			irradiance = float(std::max(0.0f, dot(hit.N, l)) / (4.0 * PI * falloff)) * globalScene.pointLightSources[i]->wattage;
-			brdf = hit.material->BRDF(l, viewDir, hit.N);
+			irradiance = float(std::max(0.0f, dot(n, l)) / (4.0 * PI * falloff)) * globalScene.pointLightSources[i]->wattage;
+			brdf = hit.material->BRDF(l, viewDir, n);
 
 			if (hit.material->isTextured) {
 				brdf *= hit.material->fetchTexture(hit.T);

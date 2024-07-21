@@ -73,7 +73,6 @@ static void A3(int argc, const char* argv[]) {
     if (argc > 1) globalParticleSystem.sphereMeshFilePath = argv[1];
     globalParticleSystem.initialize();
 }
-// ======== you probably don't need to modify above in A1 to A3 ========
 
 static void Project(int argc, const char* argv[]) {
     setupScene(argc, argv);
