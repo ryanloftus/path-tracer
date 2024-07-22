@@ -55,7 +55,7 @@ constexpr float RadToDeg = 180.0f / PI;
 
 // for ray tracing
 constexpr float Epsilon = 5e-5f;
-static int maxLevel = 4;
+static int maxLevel = 10;
 constexpr float etaAir = 1.0f; // 1.00029f;
 
 // for SAH BVH
@@ -464,7 +464,8 @@ public:
 		return float3(r, g, b) / 255.0f;
 	}
 
-	float3 BRDF(const float3& wi, const float3& wo, const float3& n) const {
+	// float3 BRDF(const float3& wi, const float3& wo, const float3& n) const {
+	float3 BRDF() const {
 		float3 brdfValue = float3(0.0f);
 		if (type == MAT_LAMBERTIAN) {
 			// BRDF
@@ -2017,8 +2018,7 @@ public:
 		// loop over all pixels in the image
 		for (int j = 0; j < globalHeight; ++j) {
 			for (int i = xmin; i <= xmax; ++i) {
-				// TODO: more efficient sampling method (Monte Carlo)
-				int SAMPLES = 10;
+				int SAMPLES = 50;
 				float3 pixelValue = float3(0.0f);
 				for (int k = 0; k < SAMPLES; ++k) {
 					const Ray ray = generateRay(i, j);
@@ -2112,57 +2112,144 @@ static float3 refractRay(const float3& viewDir, const HitInfo& hit, const int le
 	refractedRay.o = hit.P - Epsilon * n;
 	HitInfo nextHit;
 	bool isHit = globalScene.intersect(nextHit, refractedRay);
-	float3 refractedRayValue = (isHit ? shade(nextHit, -refractedRay.d, level+1) : globalScene.ibl(refractedRay));
 	
 	// Fresnel
 	float cosThetaI = wn / (length(wi) * length(n));
 	float cosThetaO = dot(n, refractedRay.d) / (length(n) * length(refractedRay.d));
 	float R = fresnel(eta1, eta2, cosThetaI, cosThetaO);
 
-	return R * reflectRay(viewDir, hit, level) + (1 - R) * refractedRayValue;
+	if (PCG32::rand() < R) {
+		return reflectRay(viewDir, hit, level);
+	} else {
+		float3 refractedRayValue = (isHit ? shade(nextHit, -refractedRay.d, level+1) : globalScene.ibl(refractedRay));
+		return refractedRayValue;
+	}
+
+	// return R * reflectRay(viewDir, hit, level) + (1 - R) * refractedRayValue;
+}
+
+// generate a cosine-weighted random vector in the hemisphere of w
+static float3 cosineWeightedHemisphereSample(const float3& w) {
+	// Generate a random point on a unit disk
+    float u1 = PCG32::rand();
+    float u2 = PCG32::rand();
+    float r = sqrt(u1);
+    float theta = 2.0f * PI * u2;
+    
+    float x = r * cos(theta);
+    float y = r * sin(theta);
+
+    // Calculate the z coordinate
+    float z = sqrt(1.0f - u1);
+
+    // Create the vector
+    float3 sample = float3(x, y, z);
+
+    // Transform to the hemisphere defined by the normal
+    float3 up = fabs(w.z) < 0.999f ? float3(0.0f, 0.0f, 1.0f) : float3(1.0f, 0.0f, 0.0f);
+    float3 tangent = normalize(cross(up, w));
+    float3 bitangent = cross(w, tangent);
+
+    return normalize(tangent * sample.x + bitangent * sample.y + w * sample.z);
+}
+
+// generate a uniform random vector in the hemisphere of w
+static float3 uniformHemisphereSample(const float3& w) {
+	// generate random numbers
+	float r1 = 2 * PI * PCG32::rand();
+	float r2 = PCG32::rand();
+	float r2s = sqrtf(r2);
+
+	// convert to spherical coordinates
+	float phi = 2.0 * PI * r1;
+	float x = cosf(phi) * r2s;
+	float y = sinf(phi) * r2s;
+	float z = sqrtf(1 - r2);
+
+	// create coordinate system
+	float3 up = float3(0.0f, 0.0f, 1.0f);
+	float3 tangent = normalize(cross(up, w));
+	float3 bitangent = normalize(cross(w, tangent));
+
+	// convert spherical coordinates to cartesian
+	float3 direction = float3(
+		tangent[0] * x + bitangent[0] * y + w[0] * z,
+		tangent[1] * x + bitangent[1] * y + w[1] * z,
+		tangent[2] * x + bitangent[2] * y + w[2] * z
+	);
+
+	return normalize(direction);
+}
+
+#define cosine_weighted_hemisphere_sampling
+
+static float3 shadeLambertian(const HitInfo& hit, const float3& viewDir, const int level) {
+	float3 L = float3(0.0f);
+	float3 irradiance;
+	
+	float3 brdf = hit.material->BRDF();
+	if (hit.material->isTextured) {
+		brdf *= hit.material->fetchTexture(hit.T);
+	}
+	// return brdf * PI; // debug output
+
+	float wn = dot(-viewDir, hit.N);
+	bool isBackFace = (wn > 0);
+	float3 n = (isBackFace ? -hit.N : hit.N);
+
+	// loop over all of the point light sources
+	for (int i = 0; i < globalScene.pointLightSources.size(); i++) {
+		float3 l = globalScene.pointLightSources[i]->position - hit.P;
+
+		HitInfo dh;
+		Ray ray;
+		ray.d = -1 * l;
+		ray.o = globalScene.pointLightSources[i]->position;
+		if (globalScene.intersect(dh, ray) && distance(dh.P, ray.o) + Epsilon * 0.5f < distance(hit.P, ray.o)) {
+			continue;
+		}
+
+		// the inverse-squared falloff
+		const float falloff = length2(l);
+
+		// normalize the light direction
+		l /= sqrtf(falloff);
+
+		// get the irradiance
+		irradiance = float(std::max(0.0f, dot(n, l)) / (4.0 * PI * falloff)) * globalScene.pointLightSources[i]->wattage;
+
+		L += irradiance * brdf;
+	}
+
+	// make a new random ray from here and keep going
+	Ray newRay;
+#ifdef cosine_weighted_hemisphere_sampling
+	newRay.d = cosineWeightedHemisphereSample(n);
+#else
+	newRay.d = uniformHemisphereSample(n);
+#endif
+	newRay.o = hit.P + Epsilon * n;
+	const float cosTheta = dot(newRay.d, n);
+
+	// probability of the newRay
+#ifdef cosine_weighted_hemisphere_sampling
+	const float p = cosTheta / PI;
+#else
+	const float p = 1 / (PI * 2);
+#endif
+
+	HitInfo nextHit;
+	bool isHit = globalScene.intersect(nextHit, newRay);
+	float3 nextColor = (isHit ? shade(nextHit, -newRay.d, level + 1) : globalScene.ibl(newRay));
+
+	return L + nextColor * brdf * cosTheta / p;
 }
 
 static float3 shade(const HitInfo& hit, const float3& viewDir, const int level) {
 	if (level > maxLevel) {
 		return float3(0.0f);
 	} else if (hit.material->type == MAT_LAMBERTIAN) {
-		float3 L = float3(0.0f);
-		float3 brdf, irradiance;
-
-		float wn = dot(-viewDir, hit.N);
-		bool isBackFace = (wn > 0);
-		float3 n = (isBackFace ? -hit.N : hit.N);
-
-		// loop over all of the point light sources
-		for (int i = 0; i < globalScene.pointLightSources.size(); i++) {
-			float3 l = globalScene.pointLightSources[i]->position - hit.P;
-
-			HitInfo dh;
-			Ray ray;
-			ray.d = -1 * l;
-			ray.o = globalScene.pointLightSources[i]->position;
-			if (globalScene.intersect(dh, ray) && distance(dh.P, ray.o) + Epsilon * 0.5f < distance(hit.P, ray.o)) {
-				continue;
-			}
-
-			// the inverse-squared falloff
-			const float falloff = length2(l);
-
-			// normalize the light direction
-			l /= sqrtf(falloff);
-
-			// get the irradiance
-			irradiance = float(std::max(0.0f, dot(n, l)) / (4.0 * PI * falloff)) * globalScene.pointLightSources[i]->wattage;
-			brdf = hit.material->BRDF(l, viewDir, n);
-
-			if (hit.material->isTextured) {
-				brdf *= hit.material->fetchTexture(hit.T);
-			}
-			// return brdf * PI; //debug output
-
-			L += irradiance * brdf;
-		}
-		return L;
+		return shadeLambertian(hit, viewDir, level);
 	} else if (hit.material->type == MAT_METAL) {
 		return hit.material->Ks * reflectRay(viewDir, hit, level);
 	} else if (hit.material->type == MAT_GLASS) {
@@ -2172,12 +2259,6 @@ static float3 shade(const HitInfo& hit, const float3& viewDir, const int level) 
 		return float3(100.0f, 0.0f, 100.0f);
 	}
 }
-
-
-
-
-
-
 
 // OpenGL initialization (you will not use any OpenGL/Vulkan/DirectX... APIs to render 3D objects!)
 // you probably do not need to modify this in A0 to A3.
@@ -2259,8 +2340,6 @@ public:
 	}
 };
 
-
-
 // main window
 // you probably do not need to modify this in A0 to A3.
 class CS488Window {
@@ -2326,5 +2405,4 @@ public:
 		}
 	}
 };
-
 
