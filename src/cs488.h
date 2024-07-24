@@ -424,7 +424,7 @@ public:
 
 	enumMaterialType type = MAT_LAMBERTIAN;
 	float eta = 1.0f;
-	float glossiness = 1.0f;
+	float glossiness = 0.1f;
 
 	float3 Ka = float3(0.0f);
 	float3 Kd = float3(0.9f);
@@ -2018,7 +2018,7 @@ public:
 		// loop over all pixels in the image
 		for (int j = 0; j < globalHeight; ++j) {
 			for (int i = xmin; i <= xmax; ++i) {
-				int SAMPLES = 50;
+				int SAMPLES = 100;
 				float3 pixelValue = float3(0.0f);
 				for (int k = 0; k < SAMPLES; ++k) {
 					const Ray ray = generateRay(i, j);
@@ -2061,10 +2061,6 @@ static float fresnel(float eta1, float eta2, float cosThetaI, float cosThetaO) {
 }
 
 static float3 reflectRay(const float3& viewDir, const HitInfo& hit, const int level) {
-	// steps:
-	// 1. find new ray's vector using formula from slides
-	// 2. find new ray's first hit using the intersect function
-	// 3. call shade on that point
 	float3 wi = -viewDir;
 	Ray reflectedRay;
 	float3 n = hit.N;
@@ -2075,6 +2071,7 @@ static float3 reflectRay(const float3& viewDir, const HitInfo& hit, const int le
 	}
 	reflectedRay.d = -2 * wn * n + wi;
 	reflectedRay.o = hit.P - Epsilon * n;
+
 	HitInfo nextHit;
 	bool isHit = globalScene.intersect(nextHit, reflectedRay);
 	if (isHit) {
@@ -2240,7 +2237,7 @@ static float3 shadeLambertian(const HitInfo& hit, const float3& viewDir, const i
 
 	HitInfo nextHit;
 	bool isHit = globalScene.intersect(nextHit, newRay);
-	float3 nextColor = (isHit ? shade(nextHit, -newRay.d, level + 1) : globalScene.ibl(newRay));
+	float3 nextColor = (isHit ? shade(nextHit, -newRay.d, level + 1) : globalScene.ibl(newRay) * p);
 
 	return L + nextColor * brdf * cosTheta / p;
 }
