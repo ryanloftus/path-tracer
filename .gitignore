@@ -10,5 +10,4 @@ Makefile
 CS488
 test_fs_support_case_sensitivity
 .DS_Store
-media
 external

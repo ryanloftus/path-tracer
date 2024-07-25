@@ -29,3 +29,7 @@ The performance improvement for running with 5000 single-triangle particles on m
 2.917 without enhancement.
 
 The time was measured by from the start of `computeAccumulatedForces()` to the end of `computeAccumulatedForces()` for one frame. Measurements given take the average over the first 10 frames.
+
+## References
+
+https://www.kevinbeason.com/smallpt/
