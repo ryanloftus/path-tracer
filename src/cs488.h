@@ -104,6 +104,7 @@ static double m_mouseY = 0.0;
 
 // path tracing
 static int numThreads = std::thread::hardware_concurrency();
+#define PROGRESSIVE_PATHTRACING
 
 
 // rendering algorithm
@@ -429,6 +430,7 @@ public:
 	float3 Ka = float3(0.0f);
 	float3 Kd = float3(0.9f);
 	float3 Ks = float3(0.0f);
+	float3 Ke = float3(0.0f);
 	float Ns = 0.0;
 
 	// support 8-bit texture
@@ -947,10 +949,10 @@ public:
 
 private:
 	// === you do not need to modify the followings in this class ===
-	void loadTexture(const char* fname, const int i) {
+	void loadTexture(const char* fname, Material& mtl) {
 		int comp;
-		materials[i].texture = stbi_load(fname, &materials[i].textureWidth, &materials[i].textureHeight, &comp, 3);
-		if (!materials[i].texture) {
+		mtl.texture = stbi_load(fname, &mtl.textureWidth, &mtl.textureHeight, &comp, 3);
+		if (!mtl.texture) {
 			std::cerr << "Unable to load texture: " << fname << std::endl;
 			return;
 		}
@@ -967,6 +969,7 @@ private:
 
 		Material mtl;
 		mtl.texture = nullptr;
+		mtl.name = "";
 		char line[81];
 		while (fgets(line, 80, fp) != nullptr) {
 			float r, g, b, s;
@@ -976,6 +979,8 @@ private:
 
 			if (lineStr.compare(0, 6, "newmtl", 0, 6) == 0) {
 				lineStr.erase(0, 7);
+				if (mtl.name != "") materials.push_back(mtl);
+				mtl = Material();
 				mtl.name = lineStr;
 				mtl.isTextured = false;
 			} else if (lineStr.compare(0, 2, "Ka", 0, 2) == 0) {
@@ -994,15 +999,18 @@ private:
 				lineStr.erase(0, 3);
 				sscanf(lineStr.c_str(), "%f\n", &s);
 				mtl.Ns = s;
-				mtl.texture = nullptr;
-				materials.push_back(mtl);
 			} else if (lineStr.compare(0, 6, "map_Kd", 0, 6) == 0) {
 				lineStr.erase(0, 7);
 				lineStr.erase(lineStr.size() - 1, 1);
-				materials[i - 1].isTextured = true;
-				loadTexture((base_dir + lineStr).c_str(), i - 1);
+				mtl.isTextured = true;
+				loadTexture((base_dir + lineStr).c_str(), mtl);
+			} else if (lineStr.compare(0, 2, "Ke", 0, 2) == 0) {
+				lineStr.erase(0, 3);
+				sscanf(lineStr.c_str(), "%f %f %f\n", &r, &g, &b);
+				mtl.Ke = float3(r, g, b);
 			}
 		}
+		if (mtl.name != "") materials.push_back(mtl);
 
 		fclose(fp);
 	}
@@ -2018,7 +2026,7 @@ public:
 		// loop over all pixels in the image
 		for (int j = 0; j < globalHeight; ++j) {
 			for (int i = xmin; i <= xmax; ++i) {
-				int SAMPLES = 100;
+				int SAMPLES = 20;
 				float3 pixelValue = float3(0.0f);
 				for (int k = 0; k < SAMPLES; ++k) {
 					const Ray ray = generateRay(i, j);
@@ -2239,7 +2247,8 @@ static float3 shadeLambertian(const HitInfo& hit, const float3& viewDir, const i
 	bool isHit = globalScene.intersect(nextHit, newRay);
 	float3 nextColor = (isHit ? shade(nextHit, -newRay.d, level + 1) : globalScene.ibl(newRay) * p);
 
-	return L + nextColor * brdf * cosTheta / p;
+	// return L + hit.material->Ke + nextColor * brdf * cosTheta / p;
+	return hit.material->Ke + nextColor * brdf * cosTheta / p;
 }
 
 static float3 shade(const HitInfo& hit, const float3& viewDir, const int level) {
