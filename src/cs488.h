@@ -466,6 +466,7 @@ public:
 	float3 N; // shading normal vector
 	float2 T; // texture coordinate
 	const Material* material; // const pointer to the material of the intersected object
+	bool backface; // is the hit on the back face of the surface
 };
 
 
@@ -1525,6 +1526,14 @@ public:
 				}
 			}
 		}
+
+		if (hit) {
+			minHit.backface = dot(ray.d, minHit.N) > 0;
+			if (minHit.backface) {
+				minHit.N = -minHit.N;
+			}
+		}
+
 		return hit;
 	}
 
@@ -1661,39 +1670,25 @@ static float fresnel(float eta1, float eta2, float cosThetaI, float cosThetaO) {
 static float3 reflectRay(const float3& viewDir, const HitInfo& hit, const int level) {
 	float3 wi = -viewDir;
 	Ray reflectedRay;
-	float3 n = hit.N;
-	float wn = dot(wi, n);
-	if (wn < 0) {
-		wn = -wn;
-		n = -n;
-	}
-	reflectedRay.d = -2 * wn * n + wi;
-	reflectedRay.o = hit.P - Epsilon * n;
+	reflectedRay.d = -2 * dot(wi, hit.N) * hit.N + wi;
+	reflectedRay.o = hit.P + Epsilon * hit.N;
 
 	HitInfo nextHit;
 	bool isHit = globalScene.intersect(nextHit, reflectedRay);
-	if (isHit) {
-		return shade(nextHit, -reflectedRay.d, level+1);
-	} else {
-		return globalScene.ibl(reflectedRay);
-	}
+	return isHit ? shade(nextHit, -reflectedRay.d, level+1) : globalScene.ibl(reflectedRay);
 }
 
 static float3 refractRay(const float3& viewDir, const HitInfo& hit, const int level) {
 	float3 wi = -viewDir;
-	Ray refractedRay;
 	float eta1;
 	float eta2;
 	float wn = dot(wi, hit.N);
-	float3 n = hit.N;
-	if (wn < 0) {
-		eta1 = etaAir;
-		eta2 = hit.material->eta;
-	} else {
+	if (hit.backface) {
 		eta1 = hit.material->eta;
 		eta2 = etaAir;
-		wn = -wn;
-		n = -n;
+	} else {
+		eta1 = etaAir;
+		eta2 = hit.material->eta;
 	}
 	float underRoot = 1 - powf(eta1 / eta2, 2) * (1 - powf(wn, 2));
 
@@ -1703,14 +1698,15 @@ static float3 refractRay(const float3& viewDir, const HitInfo& hit, const int le
 	}
 
 	// Refracted ray
-	refractedRay.d = (eta1 / eta2) * (wi - wn * n) - (sqrtf(underRoot) * n);
-	refractedRay.o = hit.P - Epsilon * n;
+	Ray refractedRay;
+	refractedRay.d = (eta1 / eta2) * (wi - wn * hit.N) - (sqrtf(underRoot) * hit.N);
+	refractedRay.o = hit.P - Epsilon * hit.N;
 	HitInfo nextHit;
 	bool isHit = globalScene.intersect(nextHit, refractedRay);
 	
 	// Fresnel
-	float cosThetaI = wn / (length(wi) * length(n));
-	float cosThetaO = dot(n, refractedRay.d) / (length(n) * length(refractedRay.d));
+	float cosThetaI = wn / (length(wi) * length(hit.N));
+	float cosThetaO = dot(hit.N, refractedRay.d) / (length(hit.N) * length(refractedRay.d));
 	float R = fresnel(eta1, eta2, cosThetaI, cosThetaO);
 
 	if (PCG32::rand() < R) {
@@ -1753,13 +1749,9 @@ static float3 shadeLambertian(const HitInfo& hit, const float3& viewDir, const i
 	}
 	// return brdf * PI; // debug output
 
-	float wn = dot(-viewDir, hit.N);
-	bool isBackFace = (wn > 0);
-	float3 n = (isBackFace ? -hit.N : hit.N);
-
 	// make a new random ray from here and keep going
-	Ray newRay(hit.P + Epsilon * n, cosineWeightedHemisphereSample(n));
-	const float cosTheta = dot(newRay.d, n);
+	Ray newRay(hit.P + Epsilon * hit.N, cosineWeightedHemisphereSample(hit.N));
+	const float cosTheta = dot(newRay.d, hit.N);
 
 	// avoid numerical issues caused by horizontal rays
 	if (cosTheta < Epsilon) {
@@ -1776,7 +1768,7 @@ static float3 shadeLambertian(const HitInfo& hit, const float3& viewDir, const i
 	float3 currentColor = hit.material->Ke + nextColor * brdf * cosTheta / p;
 	if (hit.material->opacity < 1.0f - Epsilon) {
 		// send a ray through the current surface
-		newRay.o = hit.P - Epsilon * n;
+		newRay.o = hit.P - Epsilon * hit.N;
 		newRay.d = -viewDir;
 		isHit = globalScene.intersect(nextHit, newRay);
 		nextColor = (isHit ? shade(nextHit, viewDir, level + 1) : globalScene.ibl(newRay));
