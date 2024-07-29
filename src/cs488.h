@@ -370,13 +370,13 @@ public:
 
 	enumMaterialType type = MAT_LAMBERTIAN;
 	float eta = 1.0f;
-	float glossiness = 0.1f;
 
 	float3 Ka = float3(0.0f);
 	float3 Kd = float3(0.9f);
 	float3 Ks = float3(0.0f);
 	float3 Ke = float3(0.0f);
 	float Ns = 0.0;
+	float opacity = 1.0f;
 
 	// support 8-bit texture
 	bool isTextured = false;
@@ -829,7 +829,6 @@ public:
 
 
 private:
-	// === you do not need to modify the followings in this class ===
 	void loadTexture(const char* fname, Material& mtl) {
 		int comp;
 		mtl.texture = stbi_load(fname, &mtl.textureWidth, &mtl.textureHeight, &comp, 3);
@@ -889,6 +888,10 @@ private:
 				lineStr.erase(0, 3);
 				sscanf(lineStr.c_str(), "%f %f %f\n", &r, &g, &b);
 				mtl.Ke = float3(r, g, b);
+			} else if (lineStr.compare(0, 2, "Op", 0, 2) == 0) {
+				lineStr.erase(0, 3);
+				sscanf(lineStr.c_str(), "%f\n", &s);
+				mtl.opacity = s;
 			}
 		}
 		if (mtl.name != "") materials.push_back(mtl);
@@ -1770,7 +1773,17 @@ static float3 shadeLambertian(const HitInfo& hit, const float3& viewDir, const i
 	bool isHit = globalScene.intersect(nextHit, newRay);
 	float3 nextColor = (isHit ? shade(nextHit, -newRay.d, level + 1) : globalScene.ibl(newRay) * p);
 
-	return hit.material->Ke + nextColor * brdf * cosTheta / p;
+	float3 currentColor = hit.material->Ke + nextColor * brdf * cosTheta / p;
+	if (hit.material->opacity < 1.0f - Epsilon) {
+		// send a ray through the current surface
+		newRay.o = hit.P - Epsilon * n;
+		newRay.d = -viewDir;
+		isHit = globalScene.intersect(nextHit, newRay);
+		nextColor = (isHit ? shade(nextHit, viewDir, level + 1) : globalScene.ibl(newRay));
+		return hit.material->opacity * currentColor + (1 - hit.material->opacity) * nextColor;
+	} else {
+		return currentColor;
+	}
 }
 
 static float3 shade(const HitInfo& hit, const float3& viewDir, const int level) {
