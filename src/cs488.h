@@ -377,6 +377,7 @@ public:
 	float3 Ke = float3(0.0f);
 	float Ns = 0.0;
 	float opacity = 1.0f;
+	float roughness = 0.6f;
 
 	// support 8-bit texture
 	bool isTextured = false;
@@ -467,6 +468,10 @@ public:
 	float2 T; // texture coordinate
 	const Material* material; // const pointer to the material of the intersected object
 	bool backface; // is the hit on the back face of the surface
+
+	inline float3 surfaceColor() const {
+		return (material->isTextured ? material->BRDF() * material->fetchTexture(T) : material->BRDF());
+	}
 };
 
 
@@ -893,6 +898,10 @@ private:
 				lineStr.erase(0, 3);
 				sscanf(lineStr.c_str(), "%f\n", &s);
 				mtl.opacity = s;
+			} else if (lineStr.compare(0, 2, "Ro", 0, 2) == 0) {
+				lineStr.erase(0, 3);
+				sscanf(lineStr.c_str(), "%f\n", &s);
+				mtl.roughness = s;
 			}
 		}
 		if (mtl.name != "") materials.push_back(mtl);
@@ -1678,7 +1687,7 @@ static float3 reflectRay(const float3& viewDir, const HitInfo& hit, const int le
 	return isHit ? shade(nextHit, -reflectedRay.d, level+1) : globalScene.ibl(reflectedRay);
 }
 
-static float3 refractRay(const float3& viewDir, const HitInfo& hit, const int level) {
+static float3 shadeGlass(const float3& viewDir, const HitInfo& hit, const int level) {
 	float3 wi = -viewDir;
 	float eta1;
 	float eta2;
@@ -1743,11 +1752,7 @@ static float3 cosineWeightedHemisphereSample(const float3& w) {
 }
 
 static float3 shadeLambertian(const HitInfo& hit, const float3& viewDir, const int level) {
-	float3 brdf = hit.material->BRDF();
-	if (hit.material->isTextured) {
-		brdf *= hit.material->fetchTexture(hit.T);
-	}
-	// return brdf * PI; // debug output
+	float3 brdf = hit.surfaceColor();
 
 	// make a new random ray from here and keep going
 	Ray newRay(hit.P + Epsilon * hit.N, cosineWeightedHemisphereSample(hit.N));
@@ -1778,22 +1783,88 @@ static float3 shadeLambertian(const HitInfo& hit, const float3& viewDir, const i
 	}
 }
 
+static float schlickFresnel(float eta1, float eta2, float cosTheta) {
+    float F0 = (eta1 - eta2) / (eta1 + eta2);
+    F0 = F0 * F0;
+    return F0 + (1 - F0) * powf(1 - cosTheta, 5);
+}
+
+static float geometrySchlickGGX(float NdotV, float roughness) {
+    float k = (roughness + 1) * (roughness + 1) / 8.0f;
+    return NdotV / (NdotV * (1.0f - k) + k);
+}
+
+static float normalDistributionGGX(float NdotH, float roughness) {
+    float alpha = roughness * roughness;
+    float alpha2 = alpha * alpha;
+    float NdotH2 = NdotH * NdotH;
+
+    float denom = NdotH2 * (alpha2 - 1.0f) + 1.0f;
+    return alpha2 / (PI * denom * denom);
+}
+
+static float cookTorranceReflectance(const float3& viewDir, const float3& lightDir, const float3& normal, const float3& F0, float roughness) {
+    float3 halfVector = normalize(viewDir + lightDir);
+    float NdotL = fmax(dot(normal, lightDir), 0.0f);
+    float NdotV = fmax(dot(normal, viewDir), 0.0f);
+    float NdotH = fmax(dot(normal, halfVector), 0.0f);
+    float VdotH = fmax(dot(viewDir, halfVector), 0.0f);
+
+    float F = schlickFresnel(1.0f, (F0.x + F0.y + F0.z) / 3.0f, VdotH);
+    float D = normalDistributionGGX(NdotH, roughness);
+    float G = geometrySchlickGGX(NdotV, roughness) * geometrySchlickGGX(NdotL, roughness);
+
+    float specular = (F * D * G) / (4.0f * NdotV * NdotL + Epsilon);
+
+    return specular;
+}
+
+static float3 shadeMetal(const HitInfo& hit, const float3& viewDir, const int level) {
+    float3 F0 = hit.surfaceColor();
+    float roughness = hit.material->roughness;
+
+    // Sample a random direction for the light
+    float3 lightDir = cosineWeightedHemisphereSample(hit.N);
+    float specular = cookTorranceReflectance(viewDir, lightDir, hit.N, F0, roughness);
+
+	if (PCG32::rand() < specular) {
+		return reflectRay(viewDir, hit, level);
+	} else {
+		// make a new random ray from here and keep going
+		Ray newRay(hit.P + Epsilon * hit.N, cosineWeightedHemisphereSample(hit.N));
+		const float cosTheta = dot(newRay.d, hit.N);
+
+		// avoid numerical issues caused by horizontal rays
+		if (cosTheta < Epsilon) {
+			return float3(0.0f);
+		}
+
+		HitInfo nextHit;
+		bool isHit = globalScene.intersect(nextHit, newRay);
+		float3 nextColor = (isHit ? shade(nextHit, -newRay.d, level + 1) : globalScene.ibl(newRay));
+		return nextColor;
+	}
+}
+
 static float3 shade(const HitInfo& hit, const float3& viewDir, const int level) {
 	if (level > maxLevel) return float3(0.0f); // guaranteed cutoff eventually
 
 	// russian roulette
     if (level > 4) {
-		float3 f = hit.material->isTextured ? hit.material->BRDF() * hit.material->fetchTexture(hit.T) : hit.material->BRDF();
-		float probability = fmax(fmax(f.x, fmax(f.y, f.z)), 0.05f);
+		float probability = 0.6f;
+		if (hit.material->type == MAT_LAMBERTIAN) {
+			float3 f = hit.surfaceColor();
+			probability = fmax(fmax(f.x, fmax(f.y, f.z)), 0.05f);
+		}
         if (PCG32::rand() > probability) return float3(0.0f);
     }
 	
 	if (hit.material->type == MAT_LAMBERTIAN) {
 		return shadeLambertian(hit, viewDir, level);
 	} else if (hit.material->type == MAT_METAL) {
-		return hit.material->Ks * reflectRay(viewDir, hit, level);
+		return shadeMetal(hit, viewDir, level);
 	} else if (hit.material->type == MAT_GLASS) {
-		return refractRay(viewDir, hit, level);
+		return shadeGlass(viewDir, hit, level);
 	} else {
 		// something went wrong - make it apparent that it is an error
 		return float3(100.0f, 0.0f, 100.0f);
