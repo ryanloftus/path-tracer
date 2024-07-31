@@ -902,6 +902,10 @@ private:
 				lineStr.erase(0, 3);
 				sscanf(lineStr.c_str(), "%f\n", &s);
 				mtl.roughness = s;
+			} else if (lineStr.compare(0, 2, "Ri", 0, 2) == 0) {
+				lineStr.erase(0, 3);
+				sscanf(lineStr.c_str(), "%f\n", &s);
+				mtl.eta = s;
 			}
 		}
 		if (mtl.name != "") materials.push_back(mtl);
@@ -1670,16 +1674,23 @@ public:
 };
 static Scene globalScene;
 
+static float saturate(float x, float l = 0, float u = 1) {
+	return (x < l ? l : (x > u ? u : x));
+}
+
 static float fresnel(float eta1, float eta2, float cosThetaI, float cosThetaO) {
 	float rhoS = (eta1 * cosThetaI - eta2 * cosThetaO) / (eta1 * cosThetaI + eta2 * cosThetaO);
 	float rhoT = (eta1 * cosThetaO - eta2 * cosThetaI) / (eta1 * cosThetaO + eta2 * cosThetaI);
 	return (powf(rhoS, 2) + powf(rhoT, 2)) / 2;
 }
 
+static float3 reflectVector(const float3& v, const float3& reflAxis) {
+	return -2 * dot(v, reflAxis) * reflAxis + v;
+}
+
 static float3 reflectRay(const float3& viewDir, const HitInfo& hit, const int level) {
-	float3 wi = -viewDir;
 	Ray reflectedRay;
-	reflectedRay.d = -2 * dot(wi, hit.N) * hit.N + wi;
+	reflectedRay.d = reflectVector(-viewDir, hit.N);
 	reflectedRay.o = hit.P + Epsilon * hit.N;
 
 	HitInfo nextHit;
@@ -1726,16 +1737,44 @@ static float3 shadeGlass(const float3& viewDir, const HitInfo& hit, const int le
 	}
 }
 
+// generate a uniform random vector in the hemisphere of w
+static float3 uniformHemisphereSample(const float3& w) {
+	// generate random numbers
+	float r1 = 2 * PI * PCG32::rand();
+	float r2 = PCG32::rand();
+	float r2s = sqrtf(r2);
+
+	// convert to spherical coordinates
+	float phi = 2.0 * PI * r1;
+	float x = cosf(phi) * r2s;
+	float y = sinf(phi) * r2s;
+	float z = sqrtf(1 - r2);
+
+	// create coordinate system
+	float3 up = float3(0.0f, 0.0f, 1.0f);
+	float3 tangent = normalize(cross(up, w));
+	float3 bitangent = normalize(cross(w, tangent));
+
+	// convert spherical coordinates to cartesian
+	float3 direction = float3(
+		tangent[0] * x + bitangent[0] * y + w[0] * z,
+		tangent[1] * x + bitangent[1] * y + w[1] * z,
+		tangent[2] * x + bitangent[2] * y + w[2] * z
+	);
+
+	return normalize(direction);
+}
+
 // generate a cosine-weighted random vector in the hemisphere of w
 static float3 cosineWeightedHemisphereSample(const float3& w) {
 	// Generate a random point on a unit disk
     float u1 = PCG32::rand();
     float u2 = PCG32::rand();
-    float r = sqrt(u1);
+    float r = sqrtf(u1);
     float theta = 2.0f * PI * u2;
     
-    float x = r * cos(theta);
-    float y = r * sin(theta);
+    float x = r * cosf(theta);
+    float y = r * sinf(theta);
 
     // Calculate the z coordinate
     float z = sqrt(1.0f - u1);
@@ -1783,67 +1822,108 @@ static float3 shadeLambertian(const HitInfo& hit, const float3& viewDir, const i
 	}
 }
 
-static float schlickFresnel(float eta1, float eta2, float cosTheta) {
-    float F0 = (eta1 - eta2) / (eta1 + eta2);
-    F0 = F0 * F0;
-    return F0 + (1 - F0) * powf(1 - cosTheta, 5);
+static float schlickFresnel(float eta, float cosTheta) {
+	float etaSubOne = eta - 1;
+	float etaPlusOne = eta + 1;
+	float f0 = (etaSubOne * etaSubOne) / (etaPlusOne * etaPlusOne);
+    return f0 + (1 - f0) * powf(1 - cosTheta, 5);
 }
 
-static float geometrySchlickGGX(float NdotV, float roughness) {
-    float k = (roughness + 1) * (roughness + 1) / 8.0f;
-    return NdotV / (NdotV * (1.0f - k) + k);
+static float geometricAttenuation(float NdotH, float VdotH, float NdotL, float NdotV) {
+	float G1 = 2 * NdotH * NdotV / VdotH;
+	float G2 = 2 * NdotH * NdotL / VdotH;
+	return fmin(1.0f, fmin(G1, G2));
+
+    // float k = (roughness + 1) * (roughness + 1) / 8.0f;
+    // return NdotV / (NdotV * (1.0f - k) + k);
+	// float a = roughness * roughness;
+	// return 2 * NdotV / (NdotV + sqrtf(a + (1 - a) * NdotV * NdotV));
 }
 
 static float normalDistributionGGX(float NdotH, float roughness) {
     float alpha = roughness * roughness;
     float alpha2 = alpha * alpha;
-    float NdotH2 = NdotH * NdotH;
 
-    float denom = NdotH2 * (alpha2 - 1.0f) + 1.0f;
+    float denom = NdotH * NdotH * (alpha2 - 1.0f) + 1.0f;
     return alpha2 / (PI * denom * denom);
 }
 
-static float cookTorranceReflectance(const float3& viewDir, const float3& lightDir, const float3& normal, const float3& F0, float roughness) {
+static float cookTorranceReflectance(const float3& viewDir, const float3& lightDir, const HitInfo &hit) {
+	float3 n = hit.N;
+	float roughness = hit.material->roughness;
     float3 halfVector = normalize(viewDir + lightDir);
-    float NdotL = fmax(dot(normal, lightDir), 0.0f);
-    float NdotV = fmax(dot(normal, viewDir), 0.0f);
-    float NdotH = fmax(dot(normal, halfVector), 0.0f);
-    float VdotH = fmax(dot(viewDir, halfVector), 0.0f);
 
-    float F = schlickFresnel(1.0f, (F0.x + F0.y + F0.z) / 3.0f, VdotH);
+	float NdotL = saturate(dot(n, lightDir));
+    float NdotV = saturate(dot(n, viewDir));
+    float NdotH = saturate(dot(n, halfVector));
+    float VdotH = saturate(dot(viewDir, halfVector));
+
+    float F = schlickFresnel(hit.material->eta, VdotH);
     float D = normalDistributionGGX(NdotH, roughness);
-    float G = geometrySchlickGGX(NdotV, roughness) * geometrySchlickGGX(NdotL, roughness);
+    float G = geometricAttenuation(NdotH, VdotH, NdotL, NdotV);
 
     float specular = (F * D * G) / (4.0f * NdotV * NdotL + Epsilon);
 
-    return specular;
+    return saturate(specular);
+}
+
+inline float3x3 MakeRotationMatrix(float3 z)
+{
+	const float3 ref = fabs(dot(z, float3(0, 1, 0))) > 0.99f ? float3(0, 0, 1) : float3(0, 1, 0);
+
+	const float3 x = normalize(cross(ref, z));
+	const float3 y = cross(z, x);
+
+	return { x, y, z };
+}
+
+static float3 sampleHalfVector(const float3& n, const float3& viewDir, float roughness) {
+    const float3x3 world_from_geometry = MakeRotationMatrix(n);
+	const float3x3 geometry_from_world = transpose(world_from_geometry);
+	
+	const float ra = PCG32::rand();
+	const float rb = PCG32::rand();
+
+	const float alpha = roughness * roughness;
+
+	const float3 vw = viewDir;
+	const float3 vg = mul(geometry_from_world, vw);
+	const float3 vs = normalize(float3(alpha * vg.x, alpha * vg.y, vg.z));
+
+	const float area_blue = 1;
+	const float area_green = vs.z;
+
+	const float prob_blue = 1 / (area_blue + area_green);
+	const float prob_green = 1 - prob_blue;
+
+	const float phi = (rb < prob_blue) ? rb / prob_blue * PI : PI + (rb - prob_blue) / prob_green * PI;
+	const float r = sqrtf(ra);
+
+	const float x = r * cos(phi);
+	const float y = r * sin(phi) * (rb < prob_blue ? area_blue : area_green);
+	const float z = sqrtf(fmax(0.0f, 1.0f - x * x - y * y));
+
+	const float3 ms = mul(MakeRotationMatrix(vs), float3(x, y, z));
+	const float3 mg = float3(alpha * ms.x, alpha * ms.y, fmax(0.0f, ms.z));
+	
+	return normalize(mul(world_from_geometry, mg));
 }
 
 static float3 shadeMetal(const HitInfo& hit, const float3& viewDir, const int level) {
-    float3 F0 = hit.surfaceColor();
-    float roughness = hit.material->roughness;
-
     // Sample a random direction for the light
-    float3 lightDir = cosineWeightedHemisphereSample(hit.N);
-    float specular = cookTorranceReflectance(viewDir, lightDir, hit.N, F0, roughness);
+    float3 halfVector = sampleHalfVector(hit.N, viewDir, hit.material->roughness);
+	float3 lightDir = normalize(reflectVector(-viewDir, halfVector));
 
-	if (PCG32::rand() < specular) {
-		return reflectRay(viewDir, hit, level);
-	} else {
-		// make a new random ray from here and keep going
-		Ray newRay(hit.P + Epsilon * hit.N, cosineWeightedHemisphereSample(hit.N));
-		const float cosTheta = dot(newRay.d, hit.N);
+	if (dot(lightDir, hit.N) < Epsilon) return float3(0.0f);
+	
+	Ray newRay(hit.P + Epsilon * hit.N, lightDir);
+	HitInfo nextHit;
+	bool isHit = globalScene.intersect(nextHit, newRay);
+	float3 nextColor = (isHit ? shade(nextHit, -newRay.d, level + 1) : globalScene.ibl(newRay));
+    
+	float specular = cookTorranceReflectance(viewDir, lightDir, hit);
 
-		// avoid numerical issues caused by horizontal rays
-		if (cosTheta < Epsilon) {
-			return float3(0.0f);
-		}
-
-		HitInfo nextHit;
-		bool isHit = globalScene.intersect(nextHit, newRay);
-		float3 nextColor = (isHit ? shade(nextHit, -newRay.d, level + 1) : globalScene.ibl(newRay));
-		return nextColor;
-	}
+	return hit.material->Kd * nextColor * dot(lightDir, hit.N) + nextColor * hit.material->Ks * specular;
 }
 
 static float3 shade(const HitInfo& hit, const float3& viewDir, const int level) {
