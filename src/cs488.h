@@ -1245,12 +1245,12 @@ private:
 	}
 
 	void splitAABB(AABB &bb, AABB &lbb, AABB &rbb, int axis, float splitVal) {
-		float3 lbbMinP = bb.get_minp(); float3 lbbMaxP = bb.get_maxp();
-		float3 rbbMinP = bb.get_minp(); float3 rbbMaxP = bb.get_maxp();
+		float3 lbbMaxP = bb.get_maxp();
+		float3 rbbMinP = bb.get_minp();
 		lbbMaxP[axis] = splitVal;
 		rbbMinP[axis] = splitVal;
-		lbb.fit(lbbMinP); lbb.fit(lbbMaxP);
-		rbb.fit(rbbMinP); rbb.fit(rbbMaxP);
+		lbb.fit(bb.get_minp()); lbb.fit(lbbMaxP);
+		rbb.fit(rbbMinP); rbb.fit(bb.get_maxp());
 	}
 
 	// returns a pair (axis, value) that defines the optimal splitting plane axis=value

@@ -40,22 +40,44 @@ TODO: images that demonstrate each of these things
 
 ### Kd-tree
 
-A Surface-Area Heuristic Kd-tree is implemented and can be used instead of the SAH BVH. 
+A Surface-Area Heuristic Kd-tree is implemented and can be used instead of the SAH BVH. To control whether the Kd-tree is used, you can comment/uncomment the line `#define KD_TREE`.
 
 teapot.obj timing:
 
 SAH BVH: 0.4s per frame
 
-SAH KdTree: 0.8s per frame
+SAH Kd-tree: 0.6s per frame
+
+The Kd-tree is slightly slower but works perfectly.
 
 ## References
 
-### Path Tracing
+### Path Tracing, Area Lights, IBL, Fresnel
+
+requation, smallpt, and path lecture slides
 
 https://www.kevinbeason.com/smallpt/
 
 ### Microfacets
 
+https://www.graphics.cornell.edu/~bjw/microfacetbsdf.pdf
+
+https://graphicscompendium.com/gamedev/15-pbr
+
+https://graphicrants.blogspot.com/2013/08/specular-brdf-reference.html
+
+https://graphics.pixar.com/library/ReflectanceModel/paper.pdf
+
 https://github.com/pboechat/cook_torrance/blob/master/application/shaders/cook_torrance_colored.fs.glsl
 
 https://github.com/rorydriscoll/RayTracer
+
+### Alpha Blending
+
+https://www.phatcode.net/articles.php?id=233
+
+### Kd-Tree
+
+acceleration1 and acceleration2 lecture slides.
+
+https://ieeexplore.ieee.org/document/4061547
