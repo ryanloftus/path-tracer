@@ -1,35 +1,61 @@
-# cs488
+# CS488 Final Project
 
-## a2
-
-### Compilation
+## Compilation
 
 Compile and run with cmake and g++.
 
-### Specification
+## Specification
 
-Task 1 uses Verlet Integration. 
+This project now uses path tracing which is much slower, so the image quality increases each frame as each frame adds more samples per pixel.
 
-Task 2 uses particle collision for position based particle motion as described in the lecture slides.
+### Path Tracing
 
-Task 3 uses vector projection to project the position onto the sphere.
+Images are now rendered by a path tracing algorithm. The path tracer uses Monte Carlo integration, russian roulette, importance sampling, and parallelization to improve performance. The path tracer renders images with color-bleeding and global illumination which makes rendered images look more real.
 
-Task 4 adds a forces parameter to the Particle::step() function that contains the inter-particle gravitational forces computed by the ParticleSystem. Tested using particle mass of 4e8f.
+```
+TODO: images that demonstrate each of these things
+```
 
-Task 5 uses the position based response to collisions and conserves momentum by altering the prevPosition.
-Task 5 solves multiple collisions at the same time by iterating over each pair of particles several times to resolve simultaneous collisions one at a time.
+### Lambertian IBL
 
-### Extras
+The path tracer also implements IBL for all material types now, including Lambertian.
 
-For Extra 1, I implemented Barnes-Hut to speed up particle-particle gravity computations. Extra 1 can be enabled by uncommenting the line `#define A3_BONUS_1`.
+```
+TODO: images that demonstrate each of these things
+```
 
-The performance improvement for running with 5000 single-triangle particles on my laptop was:
+### Area Lights
 
-0.018 seconds with enhancement.
-2.917 without enhancement.
+The path tracer uses area lights instead of point lights which are more realistic to lights we see in real life. The path tracer renders soft shadows, which look much more real than the shadows that the raytracer had.
 
-The time was measured by from the start of `computeAccumulatedForces()` to the end of `computeAccumulatedForces()` for one frame. Measurements given take the average over the first 10 frames.
+```
+TODO: images that demonstrate each of these things
+```
+
+### Fresnel
+
+### Microfacets
+
+### Alpha Blending
+
+### Kd-tree
+
+A Surface-Area Heuristic Kd-tree is implemented and can be used instead of the SAH BVH. 
+
+teapot.obj timing:
+
+SAH BVH: 0.4s per frame
+
+SAH KdTree: 0.8s per frame
 
 ## References
 
+### Path Tracing
+
 https://www.kevinbeason.com/smallpt/
+
+### Microfacets
+
+https://github.com/pboechat/cook_torrance/blob/master/application/shaders/cook_torrance_colored.fs.glsl
+
+https://github.com/rorydriscoll/RayTracer
