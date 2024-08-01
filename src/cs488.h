@@ -1392,6 +1392,7 @@ public:
 	}
 
 	void build(const TriangleMesh* mesh) {
+		printf("Building KdTree...\n");
 		triangleMesh = mesh;
 		root = new KdTreeNode();
 		for (int i = 0; i < mesh->triangles.size(); ++i) {
@@ -1401,7 +1402,7 @@ public:
 			root->triangles.push_back(i);
 		}
 		buildRec(root);
-		printf("KdTree done building\n");
+		printf("Done.\n");
 	}
 
 	bool intersect(HitInfo& result, const Ray& ray, float tMin = 0.0f, float tMax = FLT_MAX) const {
