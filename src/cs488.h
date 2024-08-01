@@ -1224,18 +1224,18 @@ private:
 
 	// SAH constant parameters
 	const float costBBox = 0.1f;
-	const float costTri = 1.2f;
+	const float costTri = 1.0f;
 
 	float triangleMinCoordinate(const Triangle &tri, int axis) {
-		return fmin(tri.positions[0][axis], fmin(tri.positions[1][axis], tri.positions[2][axis]));
+		return std::min({ tri.positions[0][axis], tri.positions[1][axis], tri.positions[2][axis] });
 	}
 
 	float triangleMaxCoordinate(const Triangle &tri, int axis) {
-		return fmax(tri.positions[0][axis], fmax(tri.positions[1][axis], tri.positions[2][axis]));
+		return std::max({ tri.positions[0][axis], tri.positions[1][axis], tri.positions[2][axis] });
 	}
 
 	float surfaceAreaHeuristicCostAfterSplit(float aParent, float aChild1, float aChild2, int objsIn1, int objsIn2) {
-		float cost = 2 * costBBox + (aChild1 * objsIn1 + aChild2 * objsIn2) * costTri / aParent;
+		float cost = 2 * costBBox + (aChild1 / aParent) * objsIn1 * costTri + (aChild2 / aParent) * objsIn2 * costTri;
 		float lambda = (std::min(objsIn1, objsIn2) == 0 ? 0.8f : 1.0f);
 		return lambda * cost;
 	}
@@ -1269,13 +1269,16 @@ private:
 		}
 
 		// test candidates
-		int bestAxis;
-		float bestSplit;
-		float bestCost = INFINITY;
+		int bestAxis = 0;
+		float bestSplit = 0.0f;
+		float bestCost = FLT_MAX;
 		float parentArea = node->bb.area();
 		for (int ci = 0; ci < candidates.size(); ++ci) {
 			int axis = candidates[ci].first;
 			float value = candidates[ci].second;
+
+			// split should be meaningful and positive
+			if (value - Epsilon < node->bb.get_minp()[axis] || value + Epsilon > node->bb.get_maxp()[axis]) continue;
 
 			AABB bb1; AABB bb2;
 			splitAABB(node->bb, bb1, bb2, axis, value);
@@ -1283,7 +1286,7 @@ private:
 			int bb1Triangles = 0; int bb2Triangles = 0;
 			for (int triIdx : node->triangles) {
 				if (triangleMinCoordinate(triangles[triIdx], axis) <= value) ++bb1Triangles;
-				if (triangleMaxCoordinate(triangles[triIdx], axis) >= value) ++bb2Triangles;
+				if (triangleMaxCoordinate(triangles[triIdx], axis) > value) ++bb2Triangles;
 			}
 
 			float cost = surfaceAreaHeuristicCostAfterSplit(parentArea, bb1.area(), bb2.area(), bb1Triangles, bb2Triangles);
@@ -1311,18 +1314,17 @@ private:
 		if (cost >= surfaceAreaHeuristicCostNoSplit(node->triangles.size())) return;
 
 		// split on plane
-		KdTreeNode* leftChild = new KdTreeNode();
-		KdTreeNode* rightChild = new KdTreeNode();
-		splitAABB(node->bb, leftChild->bb, rightChild->bb, axis, value);
+		node->left = new KdTreeNode();
+		node->right = new KdTreeNode();
+		splitAABB(node->bb, node->left->bb, node->right->bb, axis, value);
 		const std::vector<Triangle>& triangles = triangleMesh->triangles;
 		for (int triIdx : node->triangles) {
-			if (triangleMinCoordinate(triangles[triIdx], axis) <= value) leftChild->triangles.push_back(triIdx);
-			if (triangleMaxCoordinate(triangles[triIdx], axis) >= value) rightChild->triangles.push_back(triIdx);
+			if (triangleMinCoordinate(triangles[triIdx], axis) <= value) node->left->triangles.push_back(triIdx);
+			if (triangleMaxCoordinate(triangles[triIdx], axis) > value) node->right->triangles.push_back(triIdx);
 		}
-		buildRec(leftChild);
-		buildRec(rightChild);
-		node->left = leftChild;
-		node->right = rightChild;
+
+		buildRec(node->left);
+		buildRec(node->right);
 	}
 
 	void print() const {
