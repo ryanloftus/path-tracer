@@ -36,6 +36,7 @@ using namespace linalg::aliases;
 #include <ctime>
 #include <thread>
 #include <chrono>
+#include <queue>
 
 
 // main window
@@ -235,7 +236,7 @@ public:
 Image AccumulationBuffer(globalWidth, globalHeight);
 Image FrameBuffer(globalWidth, globalHeight);
 
-// keyboard events (you do not need to modify it unless you want to)
+// keyboard events
 void keyFunc(GLFWwindow* window, int key, int scancode, int action, int mods) {
 	if (action == GLFW_PRESS || action == GLFW_REPEAT) {
 		switch (key) {
@@ -269,31 +270,37 @@ void keyFunc(GLFWwindow* window, int key, int scancode, int action, int mods) {
 			case GLFW_KEY_W: {
 				globalEye += SCLFACT * globalViewDir;
 				globalLookat += SCLFACT * globalViewDir;
+				FrameBuffer.clear();
 			break;}
 
 			case GLFW_KEY_S: {
 				globalEye -= SCLFACT * globalViewDir;
 				globalLookat -= SCLFACT * globalViewDir;
+				FrameBuffer.clear();
 			break;}
 
 			case GLFW_KEY_Q: {
 				globalEye += SCLFACT * globalUp;
 				globalLookat += SCLFACT * globalUp;
+				FrameBuffer.clear();
 			break;}
 
 			case GLFW_KEY_Z: {
 				globalEye -= SCLFACT * globalUp;
 				globalLookat -= SCLFACT * globalUp;
+				FrameBuffer.clear();
 			break;}
 
 			case GLFW_KEY_A: {
 				globalEye -= SCLFACT * globalRight;
 				globalLookat -= SCLFACT * globalRight;
+				FrameBuffer.clear();
 			break;}
 
 			case GLFW_KEY_D: {
 				globalEye += SCLFACT * globalRight;
 				globalLookat += SCLFACT * globalRight;
+				FrameBuffer.clear();
 			break;}
 
 			default: break;
@@ -341,6 +348,8 @@ void cursorPosFunc(GLFWwindow* window, double mouse_x, double mouse_y) {
 
 		m_mouseX = mouse_x;
 		m_mouseY = mouse_y;
+
+		FrameBuffer.clear();
 	} else {
 		m_mouseX = mouse_x;
 		m_mouseY = mouse_y;
@@ -1193,6 +1202,215 @@ private:
 	}
 };
 
+#define KD_TREE
+
+class KdTreeNode {
+public:
+	AABB bb;
+	std::vector<int> triangles;
+	KdTreeNode* left;
+	KdTreeNode* right;
+
+	~KdTreeNode() {
+		delete left;
+		delete right;
+	}
+};
+
+class KdTree {
+private:
+	const TriangleMesh* triangleMesh = nullptr;
+	KdTreeNode* root = nullptr;
+
+	// SAH constant parameters
+	const float costBBox = 0.1f;
+	const float costTri = 1.2f;
+
+	float triangleMinCoordinate(const Triangle &tri, int axis) {
+		return fmin(tri.positions[0][axis], fmin(tri.positions[1][axis], tri.positions[2][axis]));
+	}
+
+	float triangleMaxCoordinate(const Triangle &tri, int axis) {
+		return fmax(tri.positions[0][axis], fmax(tri.positions[1][axis], tri.positions[2][axis]));
+	}
+
+	float surfaceAreaHeuristicCostAfterSplit(float aParent, float aChild1, float aChild2, int objsIn1, int objsIn2) {
+		float cost = 2 * costBBox + (aChild1 * objsIn1 + aChild2 * objsIn2) * costTri / aParent;
+		float lambda = (std::min(objsIn1, objsIn2) == 0 ? 0.8f : 1.0f);
+		return lambda * cost;
+	}
+
+	float surfaceAreaHeuristicCostNoSplit(int objs) {
+		return objs * costTri;
+	}
+
+	void splitAABB(AABB &bb, AABB &lbb, AABB &rbb, int axis, float splitVal) {
+		float3 lbbMinP = bb.get_minp(); float3 lbbMaxP = bb.get_maxp();
+		float3 rbbMinP = bb.get_minp(); float3 rbbMaxP = bb.get_maxp();
+		lbbMaxP[axis] = splitVal;
+		rbbMinP[axis] = splitVal;
+		lbb.fit(lbbMinP); lbb.fit(lbbMaxP);
+		rbb.fit(rbbMinP); rbb.fit(rbbMaxP);
+	}
+
+	// returns a pair (axis, value) that defines the optimal splitting plane axis=value
+	std::tuple<int, float, float> findPlane(KdTreeNode* node) {
+		const std::vector<Triangle>& triangles = triangleMesh->triangles;
+
+		// find candidates for splitting
+		std::vector<std::pair<int, float>> candidates;
+		for (int axis = 0; axis < 3; ++axis) {
+			for (int triIdx : node->triangles) {
+				float candidate1 = triangleMinCoordinate(triangles[triIdx], axis);
+				float candidate2 = triangleMaxCoordinate(triangles[triIdx], axis);
+				candidates.push_back(std::make_pair(axis, candidate1));
+				candidates.push_back(std::make_pair(axis, candidate2));
+			}
+		}
+
+		// test candidates
+		int bestAxis;
+		float bestSplit;
+		float bestCost = INFINITY;
+		float parentArea = node->bb.area();
+		for (int ci = 0; ci < candidates.size(); ++ci) {
+			int axis = candidates[ci].first;
+			float value = candidates[ci].second;
+
+			AABB bb1; AABB bb2;
+			splitAABB(node->bb, bb1, bb2, axis, value);
+
+			int bb1Triangles = 0; int bb2Triangles = 0;
+			for (int triIdx : node->triangles) {
+				if (triangleMinCoordinate(triangles[triIdx], axis) <= value) ++bb1Triangles;
+				if (triangleMaxCoordinate(triangles[triIdx], axis) >= value) ++bb2Triangles;
+			}
+
+			float cost = surfaceAreaHeuristicCostAfterSplit(parentArea, bb1.area(), bb2.area(), bb1Triangles, bb2Triangles);
+			if (cost < bestCost) {
+				bestCost = cost;
+				bestAxis = axis;
+				bestSplit = value;
+			}
+		}
+
+		// return best candidate
+		return std::make_tuple(bestAxis, bestSplit, bestCost);
+	}
+
+	void buildRec(KdTreeNode* node) {
+		if (node->triangles.size() <= 1) return;
+
+		// find plane to split on
+		std::tuple<int, float, float> plane = findPlane(node);
+		int axis = std::get<0>(plane);
+		float value = std::get<1>(plane);
+		float cost = std::get<2>(plane);
+
+		// if we are better off not splitting, then don't split
+		if (cost >= surfaceAreaHeuristicCostNoSplit(node->triangles.size())) return;
+
+		// split on plane
+		KdTreeNode* leftChild = new KdTreeNode();
+		KdTreeNode* rightChild = new KdTreeNode();
+		splitAABB(node->bb, leftChild->bb, rightChild->bb, axis, value);
+		const std::vector<Triangle>& triangles = triangleMesh->triangles;
+		for (int triIdx : node->triangles) {
+			if (triangleMinCoordinate(triangles[triIdx], axis) <= value) leftChild->triangles.push_back(triIdx);
+			if (triangleMaxCoordinate(triangles[triIdx], axis) >= value) rightChild->triangles.push_back(triIdx);
+		}
+		buildRec(leftChild);
+		buildRec(rightChild);
+		node->left = leftChild;
+		node->right = rightChild;
+	}
+
+	void print() const {
+		std::queue<std::pair<KdTreeNode *, int>> q;
+		q.push(std::make_pair(root, 0));
+		int prevLevel = 0;
+		while (!q.empty()) {
+			std::pair<KdTreeNode *, int> p = q.front(); q.pop();
+			KdTreeNode *n = p.first; int l = p.second;
+			if (l != prevLevel) {
+				printf("\n");
+				prevLevel = l;
+			}
+			printf("node%d[", l);
+			for (int triIdx : n->triangles) printf("%d,", triIdx);
+			printf("] ");
+			if (n->left) {
+				q.push(std::make_pair(n->left, l+1));
+				q.push(std::make_pair(n->right, l+1));
+			}
+		}
+		printf("\n");
+	}
+
+	bool traverse(HitInfo& result, const Ray& ray, KdTreeNode* node, float tMin, float tMax) const {
+		bool hit = false;
+		HitInfo tempMinHit, tempMinHitL, tempMinHitR;
+		bool hit1, hit2;
+
+		if (node->left == nullptr) {
+			for (int triIdx : node->triangles) {
+				if (triangleMesh->raytraceTriangle(tempMinHit, ray, triangleMesh->triangles[triIdx], tMin, tMax)) {
+					hit = true;
+					if (tempMinHit.t < result.t) result = tempMinHit;
+				}
+			}
+		} else {
+			hit1 = node->left->bb.intersect(tempMinHitL, ray);
+			hit2 = node->right->bb.intersect(tempMinHitR, ray);
+
+			hit1 = hit1 && (tempMinHitL.t < result.t);
+			hit2 = hit2 && (tempMinHitR.t < result.t);
+
+			if (hit1 && hit2) {
+				if (tempMinHitL.t < tempMinHitR.t) {
+					hit = traverse(result, ray, node->left, tMin, tMax);
+					hit |= traverse(result, ray, node->right, tMin, tMax);
+				} else {
+					hit = traverse(result, ray, node->right, tMin, tMax);
+					hit |= traverse(result, ray, node->left, tMin, tMax);
+				}
+			} else if (hit1) {
+				hit = traverse(result, ray, node->left, tMin, tMax);
+			} else if (hit2) {
+				hit = traverse(result, ray, node->right, tMin, tMax);
+			}
+		}
+
+		return hit;
+	}
+
+public:
+	KdTree() = default;
+
+	~KdTree() {
+		delete root;
+	}
+
+	void build(const TriangleMesh* mesh) {
+		triangleMesh = mesh;
+		root = new KdTreeNode();
+		for (int i = 0; i < mesh->triangles.size(); ++i) {
+			root->bb.fit(mesh->triangles[i].positions[0]);
+			root->bb.fit(mesh->triangles[i].positions[1]);
+			root->bb.fit(mesh->triangles[i].positions[2]);
+			root->triangles.push_back(i);
+		}
+		buildRec(root);
+		printf("KdTree done building\n");
+	}
+
+	bool intersect(HitInfo& result, const Ray& ray, float tMin = 0.0f, float tMax = FLT_MAX) const {
+		HitInfo tempMinHit;
+		result.t = FLT_MAX;
+		return root && root->bb.intersect(tempMinHit, ray) && traverse(result, ray, root, tMin, tMax);
+	}
+};
+
 class BVHNode {
 public:
 	bool isLeaf;
@@ -1496,6 +1714,7 @@ bool BVH::traverse(HitInfo& minHit, const Ray& ray, int node_id, float tMin, flo
 class Scene {
 public:
 	std::vector<TriangleMesh*> objects;
+	std::vector<KdTree> kdTrees;
 	std::vector<BVH> bvhs;
 	Image envImage;
 	int totalSamples = 0;
@@ -1517,11 +1736,19 @@ public:
 	}
 
 	void preCalc() {
+#ifdef KD_TREE
+		kdTrees.resize(objects.size());
+		for (int i = 0; i < objects.size(); i++) {
+			objects[i]->preCalc();
+			kdTrees[i].build(objects[i]);
+		}
+#else
 		bvhs.resize(objects.size());
 		for (int i = 0; i < objects.size(); i++) {
 			objects[i]->preCalc();
 			bvhs[i].build(objects[i]);
 		}
+#endif
 	}
 
 	// ray-scene intersection
@@ -1532,7 +1759,11 @@ public:
 
 		for (int i = 0, i_n = (int)objects.size(); i < i_n; i++) {
 			//if (objects[i]->bruteforceIntersect(tempMinHit, ray, tMin, tMax)) { // for debugging
+#ifdef KD_TREE
+			if (kdTrees[i].intersect(tempMinHit, ray, tMin, tMax)) {
+#else
 			if (bvhs[i].intersect(tempMinHit, ray, tMin, tMax)) {
+#endif
 				if (tempMinHit.t < minHit.t) {
 					hit = true;
 					minHit = tempMinHit;
@@ -1833,11 +2064,6 @@ static float geometricAttenuation(float NdotH, float VdotH, float NdotL, float N
 	float G1 = 2 * NdotH * NdotV / VdotH;
 	float G2 = 2 * NdotH * NdotL / VdotH;
 	return fmin(1.0f, fmin(G1, G2));
-
-    // float k = (roughness + 1) * (roughness + 1) / 8.0f;
-    // return NdotV / (NdotV * (1.0f - k) + k);
-	// float a = roughness * roughness;
-	// return 2 * NdotV / (NdotV + sqrtf(a + (1 - a) * NdotV * NdotV));
 }
 
 static float normalDistributionGGX(float NdotH, float roughness) {
