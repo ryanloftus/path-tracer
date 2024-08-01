@@ -1369,10 +1369,10 @@ private:
 			if (hit1 && hit2) {
 				if (tempMinHitL.t < tempMinHitR.t) {
 					hit = traverse(result, ray, node->left, tMin, tMax);
-					hit |= traverse(result, ray, node->right, tMin, tMax);
+					if (tempMinHitR.t < result.t) hit |= traverse(result, ray, node->right, tMin, tMax);
 				} else {
 					hit = traverse(result, ray, node->right, tMin, tMax);
-					hit |= traverse(result, ray, node->left, tMin, tMax);
+					if (tempMinHitL.t < result.t) hit |= traverse(result, ray, node->left, tMin, tMax);
 				}
 			} else if (hit1) {
 				hit = traverse(result, ray, node->left, tMin, tMax);
