@@ -270,37 +270,31 @@ void keyFunc(GLFWwindow* window, int key, int scancode, int action, int mods) {
 			case GLFW_KEY_W: {
 				globalEye += SCLFACT * globalViewDir;
 				globalLookat += SCLFACT * globalViewDir;
-				FrameBuffer.clear();
 			break;}
 
 			case GLFW_KEY_S: {
 				globalEye -= SCLFACT * globalViewDir;
 				globalLookat -= SCLFACT * globalViewDir;
-				FrameBuffer.clear();
 			break;}
 
 			case GLFW_KEY_Q: {
 				globalEye += SCLFACT * globalUp;
 				globalLookat += SCLFACT * globalUp;
-				FrameBuffer.clear();
 			break;}
 
 			case GLFW_KEY_Z: {
 				globalEye -= SCLFACT * globalUp;
 				globalLookat -= SCLFACT * globalUp;
-				FrameBuffer.clear();
 			break;}
 
 			case GLFW_KEY_A: {
 				globalEye -= SCLFACT * globalRight;
 				globalLookat -= SCLFACT * globalRight;
-				FrameBuffer.clear();
 			break;}
 
 			case GLFW_KEY_D: {
 				globalEye += SCLFACT * globalRight;
 				globalLookat += SCLFACT * globalRight;
-				FrameBuffer.clear();
 			break;}
 
 			default: break;
@@ -348,8 +342,6 @@ void cursorPosFunc(GLFWwindow* window, double mouse_x, double mouse_y) {
 
 		m_mouseX = mouse_x;
 		m_mouseY = mouse_y;
-
-		FrameBuffer.clear();
 	} else {
 		m_mouseX = mouse_x;
 		m_mouseY = mouse_y;
@@ -1801,7 +1793,6 @@ public:
 		return Ray(globalEye, normalize(pixelPos - globalEye));
 	}
 
-	// ray tracing (you probably don't need to change it in A2)
 	void Raytrace() {
 		FrameBuffer.clear();
 
@@ -2272,8 +2263,16 @@ public:
 
 	void(*process)() = NULL;
 
+	bool cameraChanged(float3 &prevViewDir, float3 &prevRight) const {
+		return prevViewDir.x != globalViewDir.x || prevViewDir.y != globalViewDir.y || prevViewDir.z != globalViewDir.z ||
+			   prevRight.x != globalRight.x || prevRight.y != globalRight.y || prevRight.z != globalRight.z;
+	}
+
 	void start() const {
 		globalScene.preCalc();
+
+		float3 prevViewDir = globalViewDir;
+		float3 prevRight = globalRight;
 
 		// main loop
 		while (glfwWindowShouldClose(globalGLFWindow) == GL_FALSE) {
@@ -2284,6 +2283,14 @@ public:
 			glfwPollEvents();
 			globalViewDir = normalize(globalLookat - globalEye);
 			globalRight = normalize(cross(globalViewDir, globalUp));
+
+			if (cameraChanged(prevViewDir, prevRight)) {
+				FrameBuffer.clear();
+				AccumulationBuffer.clear();
+				globalScene.totalSamples = 0;
+				prevViewDir = globalViewDir;
+				prevRight = globalRight;
+			}
 
 			globalScene.Pathtrace();
 
