@@ -62,17 +62,17 @@ A Surface-Area Heuristic Kd-tree is implemented and can be used instead of the S
 
 teapot.obj timing:
 
-SAH BVH: 0.4s per frame
+SAH BVH: 0.5s per frame
 
-SAH Kd-tree: 0.6s per frame
+SAH Kd-tree: 0.4s per frame
 
 cornellbox.obj timing:
 
-SAH BVH: 2.1s per frame
+SAH BVH: 2.8s per frame
 
-SAH Kd-tree: 2.8s per frame
+SAH Kd-tree: 2.4s per frame
 
-The Kd-tree is slightly slower but works perfectly.
+The Kd-tree is slightly faster and works perfectly.
 
 ## Objectives
 
